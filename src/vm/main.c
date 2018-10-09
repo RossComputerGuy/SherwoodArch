@@ -10,9 +10,13 @@ int main(int argc,char** argv) {
 		return EXIT_FAILURE;
 	}
 	
-	vm.io.ram[0] = 30;
-	vm.io.ram[1] = SAVM_IO_RAM_BASE;
-	vm.io.ram[2] = 0;
+	vm.io.ram[0] = 44;
+	vm.io.ram[1] = SAVM_IO_UART_BASE+1;
+	vm.io.ram[2] = 'H';
+	
+	vm.io.ram[3] = 44;
+	vm.io.ram[4] = SAVM_IO_UART_BASE+1;
+	vm.io.ram[5] = 'e';
 	
 	vm.cpu.running = 1;
 	

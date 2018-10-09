@@ -14,6 +14,9 @@ savm_error_e savm_create(savm_t* vm) {
 	err = savm_rtc_create(&vm->rtc);
 	if(err != SAVM_ERROR_NONE) return err;
 	
+	err = savm_uart_create(&vm->uart);
+	if(err != SAVM_ERROR_NONE) return err;
+	
 	return savm_reset(vm);
 }
 
@@ -24,7 +27,10 @@ savm_error_e savm_destroy(savm_t* vm) {
 	savm_error_e err = savm_mailbox_destroy(&vm->mailbox);
 	if(err != SAVM_ERROR_NONE) return err;
 	
-	return savm_rtc_destroy(&vm->rtc);
+	err = savm_rtc_destroy(&vm->rtc);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	return savm_uart_destroy(&vm->uart);
 }
 
 savm_error_e savm_reset(savm_t* vm) {
@@ -45,6 +51,10 @@ savm_error_e savm_reset(savm_t* vm) {
 	
 	/* Reset the RTC */
 	err = savm_rtc_reset(&vm->rtc,vm);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	/* Reset the UART */
+	err = savm_uart_reset(&vm->uart,vm);
 	if(err != SAVM_ERROR_NONE) return err;
 	
 	/* Reset the registers */
@@ -135,6 +145,7 @@ savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val) {
 }
 
 savm_error_e savm_cpu_cycle(savm_t* vm) {
+	printf("pc = 0x%x\n",vm->cpu.regs.pc);
 	/* Fetches the instruction from memory */
 	savm_error_e err = savm_ioctl_read(vm,vm->cpu.regs.pc,&vm->cpu.regs.ip);
 	if(err != SAVM_ERROR_NONE) return err;
@@ -149,6 +160,8 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	
 	err = savm_ioctl_read(vm,vm->cpu.regs.pc+2,&val);
 	if(err != SAVM_ERROR_NONE) return err;
+	
+	printf("instr = %d, addr = 0x%x, val = %d\n",instr,addr,val);
 	
 	vm->cpu.regs.pc += 3;
 	
@@ -1208,16 +1221,17 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	err = savm_mailbox_cycle(&vm->mailbox,vm);
 	if(err != SAVM_ERROR_NONE) return err;
 	
+	err = savm_uart_cycle(&vm->uart,vm);
+	if(err != SAVM_ERROR_NONE) return err;
+	
 	vm->cpu.regs.cycle++;
 	return SAVM_ERROR_NONE;
 }
 
 /* IO Controller */
 savm_error_e savm_ioctl_mmap(savm_t* vm,uint64_t addr,uint64_t end,savm_ioctl_read_p read,savm_ioctl_write_p write) {
-	for(int i = 0;i < end-addr;i++) {
-		uint64_t tmp;
-		savm_error_e err = savm_ioctl_read(vm,addr+i,&tmp);
-		if(err == SAVM_ERROR_NONE) return SAVM_ERROR_MAPPED;
+	for(size_t x = 0;x < vm->io.mmapSize;x++) {
+		if(vm->io.mmap[x].addr == addr && vm->io.mmap[x].end == end) return SAVM_ERROR_MAPPED;
 	}
 	size_t i = -1;
 	if(vm->io.mmapSize < 1 || vm->io.mmap == NULL) {
@@ -1251,8 +1265,8 @@ savm_error_e savm_ioctl_read(savm_t* vm,uint64_t addr,uint64_t* data) {
 savm_error_e savm_ioctl_write(savm_t* vm,uint64_t addr,uint64_t data) {
 	if(vm->io.mmap == NULL) return SAVM_ERROR_NOTMAPPED;
 	for(size_t i = 0;i < vm->io.mmapSize;i++) {
-		if(vm->io.mmap[i].addr <= addr && vm->io.mmap[i].end > addr) {
-			vm->io.mmap[i].write(vm,(addr-vm->io.mmap[i].addr-0xfffffff)/0x10000000,data);
+		if(vm->io.mmap[i].addr <= addr && vm->io.mmap[i].end > addr) {\
+			vm->io.mmap[i].write(vm,addr-vm->io.mmap[i].addr,data);
 			return SAVM_ERROR_NONE;
 		}
 	}

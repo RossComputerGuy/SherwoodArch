@@ -3,6 +3,7 @@
 
 #include <savm/hardware/mailbox.h>
 #include <savm/hardware/rtc.h>
+#include <savm/hardware/uart.h>
 #include <savm/error.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -78,6 +79,20 @@
 #define SAVM_IO_RTC_END (SAVM_IO_RTC_BASE+SAVM_IO_RTC_SIZE)
 #endif
 
+/* IO CTRL -> UART */
+
+#ifndef SAVM_IO_UART_BASE
+#define SAVM_IO_UART_BASE (SAVM_IO_RTC_END+1)
+#endif
+
+#ifndef SAVM_IO_UART_SIZE
+#define SAVM_IO_UART_SIZE 0x00000003
+#endif
+
+#ifndef SAVM_IO_UART_END
+#define SAVM_IO_UART_END (SAVM_IO_UART_BASE+SAVM_IO_UART_SIZE)
+#endif
+
 /* IO CTRL -> RAM */
 
 #ifndef SAVM_IO_RAM_BASE
@@ -139,6 +154,7 @@ typedef struct savm {
 	
 	savm_mailbox_t mailbox;
 	savm_rtc_t rtc;
+	savm_uart_t uart;
 } savm_t;
 
 savm_error_e savm_create(savm_t* vm);
