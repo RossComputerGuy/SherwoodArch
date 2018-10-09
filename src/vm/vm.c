@@ -1214,9 +1214,11 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 
 /* IO Controller */
 savm_error_e savm_ioctl_mmap(savm_t* vm,uint64_t addr,uint64_t end,savm_ioctl_read_p read,savm_ioctl_write_p write) {
-	uint64_t tmp;
-	savm_error_e err = savm_ioctl_read(vm,addr,&tmp);
-	if(err == SAVM_ERROR_NONE) return SAVM_ERROR_MAPPED;
+	for(int i = 0;i < end-addr;i++) {
+		uint64_t tmp;
+		savm_error_e err = savm_ioctl_read(vm,addr+i,&tmp);
+		if(err == SAVM_ERROR_NONE) return SAVM_ERROR_MAPPED;
+	}
 	size_t i = -1;
 	if(vm->io.mmapSize < 1 || vm->io.mmap == NULL) {
 		vm->io.mmapSize = 1;

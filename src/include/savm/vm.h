@@ -57,7 +57,7 @@
 #endif
 
 #ifndef SAVM_IO_MAILBOX_SIZE
-#define SAVM_IO_MAILBOX_SIZE 0x00000006
+#define SAVM_IO_MAILBOX_SIZE 0x00000009
 #endif
 
 #ifndef SAVM_IO_MAILBOX_END
@@ -67,7 +67,7 @@
 /* IO CTRL -> RTC */
 
 #ifndef SAVM_IO_RTC_BASE
-#define SAVM_IO_RTC_BASE 0x10000007
+#define SAVM_IO_RTC_BASE (SAVM_IO_MAILBOX_END+1)
 #endif
 
 #ifndef SAVM_IO_RTC_SIZE

@@ -19,6 +19,9 @@ typedef struct {
 	uint16_t vendorID;
 	uint16_t deviceID;
 	uint8_t rev;
+	uint8_t type;
+	uint8_t classCode;
+	uint8_t subclass;
 } savm_mailbox_devhdr_t;
 
 typedef struct savm_mailbox_dev {

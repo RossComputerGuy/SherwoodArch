@@ -82,6 +82,18 @@ uint64_t savm_mailbox_read(savm_t* vm,uint64_t i) {
 			if(vm->mailbox.devIndex >= 0 && vm->mailbox.devIndex < vm->mailbox.devCount) {
 				return vm->mailbox.devices[vm->mailbox.devIndex].hdr.rev;
 			} else return 0xFFFF;
+		case 7:
+			if(vm->mailbox.devIndex >= 0 && vm->mailbox.devIndex < vm->mailbox.devCount) {
+				return vm->mailbox.devices[vm->mailbox.devIndex].hdr.type;
+			} else return 0xFFFF;
+		case 8:
+			if(vm->mailbox.devIndex >= 0 && vm->mailbox.devIndex < vm->mailbox.devCount) {
+				return vm->mailbox.devices[vm->mailbox.devIndex].hdr.classCode;
+			} else return 0xFFFF;
+		case 9:
+			if(vm->mailbox.devIndex >= 0 && vm->mailbox.devIndex < vm->mailbox.devCount) {
+				return vm->mailbox.devices[vm->mailbox.devIndex].hdr.subclass;
+			} else return 0xFFFF;
 	}
 	return 0;
 }
