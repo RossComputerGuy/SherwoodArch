@@ -145,7 +145,9 @@ savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val) {
 }
 
 savm_error_e savm_cpu_cycle(savm_t* vm) {
-	printf("pc = 0x%x\n",vm->cpu.regs.pc);
+	/* Temporary patch for issue #1 */
+	if(vm->cpu.regs.pc == 0) vm->cpu.regs.pc = SAVM_IO_RAM_BASE+(vm->cpu.regs.cycle*3);
+	
 	/* Fetches the instruction from memory */
 	savm_error_e err = savm_ioctl_read(vm,vm->cpu.regs.pc,&vm->cpu.regs.ip);
 	if(err != SAVM_ERROR_NONE) return err;
@@ -160,8 +162,6 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	
 	err = savm_ioctl_read(vm,vm->cpu.regs.pc+2,&val);
 	if(err != SAVM_ERROR_NONE) return err;
-	
-	printf("instr = %d, addr = 0x%x, val = %d\n",instr,addr,val);
 	
 	vm->cpu.regs.pc += 3;
 	
