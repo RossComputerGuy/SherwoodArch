@@ -1,5 +1,6 @@
 #include <savm/error.h>
 #include <savm/vm.h>
+#include <sys/stat.h>
 #include <string.h>
 
 uint64_t savm_ioctl_ram_read(savm_t* vm,uint64_t i);
@@ -1229,6 +1230,59 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 }
 
 /* IO Controller */
+savm_error_e savm_ioctl_loadfile(savm_t* vm,uint64_t addr,char* path) {
+	FILE* fp = fopen(path,"rb");
+	if(fp == NULL) return SAVM_ERROR_INVAL_FILE;
+	struct stat st;
+	stat(path,&st);
+	savm_error_e err = savm_ioctl_loadfp(vm,addr,(st.st_size+1)/sizeof(uint64_t),fp);
+	fclose(fp);
+	return err;
+}
+
+savm_error_e savm_ioctl_loadfp(savm_t* vm,uint64_t addr,uint64_t size,FILE* fp) {
+	uint64_t* data = malloc(sizeof(uint64_t)*size);
+	if(data == NULL) return SAVM_ERROR_MEM;
+	memset(data,0,sizeof(uint64_t)*size);
+	fread(data,sizeof(uint64_t)*size,1,fp);
+	for(uint64_t i = 0;i < size;i++) {
+		savm_error_e err = savm_ioctl_write(vm,addr+i,data[i]);
+		if(err != SAVM_ERROR_NONE) {
+			free(data);
+			return err;
+		}
+	}
+	free(data);
+	return SAVM_ERROR_NONE;
+}
+
+savm_error_e savm_ioctl_dumpfile(savm_t* vm,uint64_t addr,uint64_t size,char* path) {
+	FILE* fp = fopen(path,"w");
+	if(fp == NULL) return SAVM_ERROR_INVAL_FILE;
+	savm_error_e err = savm_ioctl_dumpfp(vm,addr,size,fp);
+	fclose(fp);
+	return err;
+}
+
+savm_error_e savm_ioctl_dumpfp(savm_t* vm,uint64_t addr,uint64_t size,FILE* fp) {
+	uint64_t* data = malloc(sizeof(uint64_t)*size);
+	if(data == NULL) return SAVM_ERROR_MEM;
+	memset(data,0,sizeof(uint64_t)*size);
+	
+	for(uint64_t i = 0;i < size;i++) {
+		savm_error_e err = savm_ioctl_read(vm,addr+i,&data[i]);
+		if(err != SAVM_ERROR_NONE) {
+			free(data);
+			return err;
+		}
+	}
+	
+	fwrite(data,sizeof(uint64_t)*size,1,fp);
+	
+	free(data);
+	return SAVM_ERROR_NONE;
+}
+
 savm_error_e savm_ioctl_mmap(savm_t* vm,uint64_t addr,uint64_t end,savm_ioctl_read_p read,savm_ioctl_write_p write) {
 	for(size_t x = 0;x < vm->io.mmapSize;x++) {
 		if(vm->io.mmap[x].addr == addr && vm->io.mmap[x].end == end) return SAVM_ERROR_MAPPED;

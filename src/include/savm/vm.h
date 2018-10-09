@@ -5,8 +5,9 @@
 #include <savm/hardware/rtc.h>
 #include <savm/hardware/uart.h>
 #include <savm/error.h>
-#include <stdint.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 /* CPU -> Flags */
@@ -166,6 +167,10 @@ savm_error_e savm_cpu_regread(savm_t* vm,uint64_t i,uint64_t* val);
 savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val);
 savm_error_e savm_cpu_cycle(savm_t* vm);
 
+savm_error_e savm_ioctl_loadfile(savm_t* vm,uint64_t addr,char* path);
+savm_error_e savm_ioctl_loadfp(savm_t* vm,uint64_t addr,uint64_t size,FILE* fp);
+savm_error_e savm_ioctl_dumpfile(savm_t* vm,uint64_t addr,uint64_t size,char* path);
+savm_error_e savm_ioctl_dumpfp(savm_t* vm,uint64_t addr,uint64_t size,FILE* fp);
 savm_error_e savm_ioctl_mmap(savm_t* vm,uint64_t addr,uint64_t end,savm_ioctl_read_p read,savm_ioctl_write_p write);
 savm_error_e savm_ioctl_read(savm_t* vm,uint64_t addr,uint64_t* data);
 savm_error_e savm_ioctl_write(savm_t* vm,uint64_t addr,uint64_t data);
