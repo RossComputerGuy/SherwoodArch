@@ -10,14 +10,13 @@ int main(int argc,char** argv) {
 		return EXIT_FAILURE;
 	}
 	
-	vm.io.ram[0] = 29;
-    vm.io.ram[1] = SAVM_IO_RAM_BASE;
-    vm.io.ram[2] = 0;
-    
-    vm.cpu.running = 1;
-    
+	vm.io.ram[0] = 30;
+	vm.io.ram[1] = SAVM_IO_RAM_BASE;
+	vm.io.ram[2] = 0;
+	
+	vm.cpu.running = 1;
+	
 	// TODO: load firmware
-	// TODO: start CPU
 	while(vm.cpu.running) {
 		err = savm_cpu_cycle(&vm);
 		if(err != SAVM_ERROR_NONE) {

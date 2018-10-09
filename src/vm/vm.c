@@ -13,7 +13,7 @@ savm_error_e savm_create(savm_t* vm) {
 savm_error_e savm_destroy(savm_t* vm) {
 	if(vm->io.ram != NULL) free(vm->io.ram);
 	if(vm->io.mmap != NULL) free(vm->io.mmap);
-    return SAVM_ERROR_NONE;
+	return SAVM_ERROR_NONE;
 }
 
 savm_error_e savm_reset(savm_t* vm) {
@@ -55,9 +55,9 @@ savm_error_e savm_cpu_regread(savm_t* vm,uint64_t i,uint64_t* val) {
 		case 0: /* flags*/
 			*val = vm->cpu.regs.flags;
 			break;
-        case 1: /* tmp */
-            *val = vm->cpu.regs.tmp;
-            break;
+		case 1: /* tmp */
+			*val = vm->cpu.regs.tmp;
+			break;
 		case 2: /* sp */
 			*val = vm->cpu.regs.sp;
 			break;
@@ -80,9 +80,9 @@ savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val) {
 		case 0: /* flags*/
 			vm->cpu.regs.flags = val;
 			break;
-        case 1: /* tmp */
-            vm->cpu.regs.tmp = val;
-            break;
+		case 1: /* tmp */
+			vm->cpu.regs.tmp = val;
+			break;
 		case 2: /* sp */
 		case 3: /* ip */
 		case 4: /* pc */
@@ -100,13 +100,13 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	
 	/* Decodes the instruction */
 	uint64_t instr = vm->cpu.regs.ip;
-    uint64_t addr;
-    uint64_t val;
-    
+	uint64_t addr;
+	uint64_t val;
+	
 	err = savm_ioctl_read(vm,vm->cpu.regs.pc+1,&addr);
 	if(err != SAVM_ERROR_NONE) return err;
-    
-    err = savm_ioctl_read(vm,vm->cpu.regs.pc+2,&val);
+	
+	err = savm_ioctl_read(vm,vm->cpu.regs.pc+2,&val);
 	if(err != SAVM_ERROR_NONE) return err;
 	
 	vm->cpu.regs.pc += 3;
@@ -115,798 +115,798 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	switch(instr) {
 		case 0: /* NOP */
 			vm->cpu.running = 0;
-            break;
+			break;
 		case 1: /* ADDR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a+b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a+b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 2: /* ADDM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a+b);
+				
+				err = savm_ioctl_write(vm,addr,a+b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+			}
+			break;
 		case 3: /* SUBR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a-b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a-b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 4: /* SUBM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a-b);
+				
+				err = savm_ioctl_write(vm,addr,a-b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+			}
+			break;
 		case 5: /* MULR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a*b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a*b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 6: /* MULM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a*b);
+				
+				err = savm_ioctl_write(vm,addr,a*b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+			}
+			break;
 		case 7: /* DIVR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                if(b == 0) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_DIVBYZERO);
-					if(err != SAVM_ERROR_NONE) return err;
-                    break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a/b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+				}
+				
+				if(b == 0) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_DIVBYZERO);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a/b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+			}
+			break;
 		case 8: /* DIVM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                if(b == 0) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_DIVBYZERO);
-					if(err != SAVM_ERROR_NONE) return err;
-                    break;
-                }
-                
-                err = savm_ioctl_write(vm,addr,a/b);
-				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+				
+				if(b == 0) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_DIVBYZERO);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+				
+				err = savm_ioctl_write(vm,addr,a/b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+			}
+			break;
 		case 9: /* ANDR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a & b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a & b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 10: /* ANDM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a & b);
+				
+				err = savm_ioctl_write(vm,addr,a & b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+			}
+			break;
 		case 11: /* ORR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a | b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a | b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 12: /* ORM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a | b);
+				
+				err = savm_ioctl_write(vm,addr,a | b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+			}
+			break;
 		case 13: /* XORR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a ^ b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a ^ b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 14: /* XORM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a ^ b);
+				
+				err = savm_ioctl_write(vm,addr,a ^ b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+			}
+			break;
 		case 15: /* NORR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,~(a | b));
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,~(a | b));
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 16: /* NORM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				};
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,~(a | b));
+				
+				err = savm_ioctl_write(vm,addr,~(a | b));
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
-        case 17: /* NANDR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			}
+			break;
+		case 17: /* NANDR */
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,~(a & b));
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,~(a & b));
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-					if(err != SAVM_ERROR_NONE) return err;
-					break;
-                }
-            }
-            break;
-        case 18: /* NANDM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
-				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+			}
+			break;
+		case 18: /* NANDM */
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,~(a & b));
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
-        case 19: /* LSHIFTR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				
+				err = savm_ioctl_write(vm,addr,~(a & b));
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+			}
+			break;
+		case 19: /* LSHIFTR */
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a << b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a << b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-					if(err != SAVM_ERROR_NONE) return err;
-					break;
-                }
-            }
-            break;
-        case 20: /* LSHIFTM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
-				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+			}
+			break;
+		case 20: /* LSHIFTM */
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a << b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
-        case 21: /* RSHIFTR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				
+				err = savm_ioctl_write(vm,addr,a << b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+			}
+			break;
+		case 21: /* RSHIFTR */
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                err = savm_cpu_regwrite(vm,addr,a >> b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				err = savm_cpu_regwrite(vm,addr,a >> b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-					if(err != SAVM_ERROR_NONE) return err;
-					break;
-                }
-            }
-            break;
-        case 22: /* RSHIFTM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
-				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+			}
+			break;
+		case 22: /* RSHIFTM */
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                err = savm_ioctl_write(vm,addr,a >> b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+				
+				err = savm_ioctl_write(vm,addr,a >> b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+			}
+			break;
 		case 23: /* CMPR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                uint64_t b;
-                err = savm_cpu_regread(vm,val,&b);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				}
+				
+				uint64_t b;
+				err = savm_cpu_regread(vm,val,&b);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                vm->cpu.regs.tmp = a == b;
-            }
-            break;
+				}
+				
+				vm->cpu.regs.tmp = a == b;
+			}
+			break;
 		case 24: /* CMPM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                uint64_t b;
-                err = savm_ioctl_read(vm,val,&b);
+				
+				uint64_t b;
+				err = savm_ioctl_read(vm,val,&b);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                vm->cpu.regs.tmp = a == b;
-            }
-            break;
+				
+				vm->cpu.regs.tmp = a == b;
+			}
+			break;
 		case 25: /* JITR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&a);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&a);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
-                if(vm->cpu.regs.tmp) vm->cpu.regs.pc = a;
-            }
-            break;
+				}
+				
+				if(vm->cpu.regs.tmp) vm->cpu.regs.pc = a;
+			}
+			break;
 		case 26: /* JITM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&a);
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&a);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-                
-                if(vm->cpu.regs.tmp) vm->cpu.regs.pc = a;
-            }
-            break;
+				
+				if(vm->cpu.regs.tmp) vm->cpu.regs.pc = a;
+			}
+			break;
 		case 27: /* JIT */
-            {
-                if(vm->cpu.regs.tmp) vm->cpu.regs.pc = addr;
-            }
-            break;
+			{
+				if(vm->cpu.regs.tmp) vm->cpu.regs.pc = addr;
+			}
+			break;
 		case 28: /* JMPR */
-            {
-                uint64_t a;
-                err = savm_cpu_regread(vm,addr,&vm->cpu.regs.pc);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				uint64_t a;
+				err = savm_cpu_regread(vm,addr,&vm->cpu.regs.pc);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-					if(err != SAVM_ERROR_NONE) return err;
-					break;
-                }
-            }
-            break;
-		case 29: /* JMPM */
-            {
-                uint64_t a;
-                err = savm_ioctl_read(vm,addr,&vm->cpu.regs.pc);
-				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            }
-            break;
+			}
+			break;
+		case 29: /* JMPM */
+			{
+				uint64_t a;
+				err = savm_ioctl_read(vm,addr,&vm->cpu.regs.pc);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+			}
+			break;
 		case 30: /* JMP */
 			vm->cpu.regs.pc = addr;
 			break;
 		case 31: /* CALLR */
-            if(vm->cpu.regs.sp < SAVM_CPU_STACK_SIZE) {
-                vm->cpu.stack[vm->cpu.regs.sp++] = vm->cpu.regs.pc;
+			if(vm->cpu.regs.sp < SAVM_CPU_STACK_SIZE) {
+				vm->cpu.stack[vm->cpu.regs.sp++] = vm->cpu.regs.pc;
 				err = savm_cpu_regread(vm,addr,&vm->cpu.regs.pc);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            } else {
+			} else {
 				err = savm_cpu_intr(vm,SAVM_CPU_INT_STACK_OVERFLOW);
 				if(err != SAVM_ERROR_NONE) return err;
 			}
-            break;
+			break;
 		case 32: /* CALLM */
-            if(vm->cpu.regs.sp < SAVM_CPU_STACK_SIZE) {
-                vm->cpu.stack[vm->cpu.regs.sp++] = vm->cpu.regs.pc;
+			if(vm->cpu.regs.sp < SAVM_CPU_STACK_SIZE) {
+				vm->cpu.stack[vm->cpu.regs.sp++] = vm->cpu.regs.pc;
 				err = savm_ioctl_read(vm,addr,&vm->cpu.regs.pc);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
-            } else {
+			} else {
 				err = savm_cpu_intr(vm,SAVM_CPU_INT_STACK_OVERFLOW);
 				if(err != SAVM_ERROR_NONE) return err;
 			}
 			break;
 		case 33: /* CALL */
-            if(vm->cpu.regs.sp < SAVM_CPU_STACK_SIZE) {
-                vm->cpu.stack[vm->cpu.regs.sp++] = vm->cpu.regs.pc;
+			if(vm->cpu.regs.sp < SAVM_CPU_STACK_SIZE) {
+				vm->cpu.stack[vm->cpu.regs.sp++] = vm->cpu.regs.pc;
 				vm->cpu.regs.pc = addr;
-            } else {
+			} else {
 				err = savm_cpu_intr(vm,SAVM_CPU_INT_STACK_OVERFLOW);
 				if(err != SAVM_ERROR_NONE) return err;
 			}
@@ -923,7 +923,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 				err = savm_cpu_regread(vm,addr,&vm->cpu.stack[vm->cpu.regs.sp++]);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
@@ -937,7 +937,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 				err = savm_ioctl_read(vm,addr,&vm->cpu.stack[vm->cpu.regs.sp++]);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
@@ -951,7 +951,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 				err = savm_cpu_regwrite(vm,addr,vm->cpu.stack[vm->cpu.regs.sp--]);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
@@ -965,7 +965,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 				err = savm_ioctl_write(vm,addr,vm->cpu.stack[vm->cpu.regs.sp--]);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
@@ -975,102 +975,102 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 			}
 			break;
 		case 39: /* MOVRR */
-            {
-                err = savm_cpu_regread(vm,val,&val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				err = savm_cpu_regread(vm,val,&val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
+				}
 				
-                err = savm_cpu_regwrite(vm,addr,val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				err = savm_cpu_regwrite(vm,addr,val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
+				}
+			}
 			break;
 		case 40: /* MOVRM */
-            {
-                err = savm_cpu_regread(vm,val,&val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				err = savm_cpu_regread(vm,val,&val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-                
+				}
+				
 				err = savm_ioctl_write(vm,addr,val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
+				}
+			}
 			break;
 		case 41: /* MOVMR */
-            {
+			{
 				err = savm_ioctl_read(vm,val,&val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
+				}
 				
-                err = savm_cpu_regwrite(vm,addr,val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				err = savm_cpu_regwrite(vm,addr,val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
+				}
+			}
 			break;
 		case 42: /* MOVMM */
-            {
+			{
 				err = savm_ioctl_read(vm,val,&val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
+				}
 				
-                err = savm_ioctl_write(vm,addr,val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				err = savm_ioctl_write(vm,addr,val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
+				}
+			}
 			break;
 		case 43: /* STOR */
-            {
-                err = savm_cpu_regwrite(vm,addr,val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+			{
+				err = savm_cpu_regwrite(vm,addr,val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
+				}
+			}
 		case 44: /* STOM */
-            {
-                err = savm_ioctl_write(vm,addr,val);
-                if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+			{
+				err = savm_ioctl_write(vm,addr,val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 				if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
-                    err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
-                }
-            }
-            break;
+				}
+			}
+			break;
 		case 45: /* INTR */
 			err = savm_cpu_regread(vm,addr,&val);
 			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
