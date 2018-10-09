@@ -7,13 +7,24 @@ void savm_ioctl_ram_write(savm_t* vm,uint64_t i,uint64_t data);
 
 savm_error_e savm_create(savm_t* vm) {
 	memset(vm,0,sizeof(savm_t));
+	
+	savm_error_e err = savm_mailbox_create(&vm->mailbox);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	err = savm_rtc_create(&vm->rtc);
+	if(err != SAVM_ERROR_NONE) return err;
+	
 	return savm_reset(vm);
 }
 
 savm_error_e savm_destroy(savm_t* vm) {
 	if(vm->io.ram != NULL) free(vm->io.ram);
 	if(vm->io.mmap != NULL) free(vm->io.mmap);
-	return SAVM_ERROR_NONE;
+	
+	savm_error_e err = savm_mailbox_destroy(&vm->mailbox);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	return savm_rtc_destroy(&vm->rtc);
 }
 
 savm_error_e savm_reset(savm_t* vm) {
@@ -26,6 +37,14 @@ savm_error_e savm_reset(savm_t* vm) {
 	/* (Re)initialize the memory map in the IO Controller */
 	if(vm->io.mmap != NULL) free(vm->io.mmap);
 	savm_error_e err = savm_ioctl_mmap(vm,SAVM_IO_RAM_BASE,SAVM_IO_RAM_END,savm_ioctl_ram_read,savm_ioctl_ram_write);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	/* Reset the mailbox */
+	err = savm_mailbox_reset(&vm->mailbox,vm);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	/* Reset the RTC */
+	err = savm_rtc_reset(&vm->rtc,vm);
 	if(err != SAVM_ERROR_NONE) return err;
 	
 	/* Reset the registers */
@@ -45,14 +64,16 @@ savm_error_e savm_cpu_intr(savm_t* vm,uint64_t intr) {
 		vm->cpu.intr = SAVM_CPU_INT_FAULT;
 		return SAVM_ERROR_NONE;
 	}
+	memcpy(&vm->cpu.iregs,&vm->cpu.regs,sizeof(savm_cpu_regs_t));
 	vm->cpu.regs.flags |= SAVM_CPU_REG_FLAG_INTR;
 	vm->cpu.intr = intr;
+	vm->cpu.regs.pc = vm->cpu.ivt[intr];
 	return SAVM_ERROR_NONE;
 }
 
 savm_error_e savm_cpu_regread(savm_t* vm,uint64_t i,uint64_t* val) {
 	switch(i) {
-		case 0: /* flags*/
+		case 0: /* flags */
 			*val = vm->cpu.regs.flags;
 			break;
 		case 1: /* tmp */
@@ -70,6 +91,18 @@ savm_error_e savm_cpu_regread(savm_t* vm,uint64_t i,uint64_t* val) {
 		case 5: /* cycle */
 			*val = vm->cpu.regs.cycle;
 			break;
+		case 6 ... 16: /* data */
+			*val = vm->cpu.regs.data[i-6];
+			break;
+		case 17 ... 27: /* index */
+			*val = vm->cpu.regs.index[i-17];
+			break;
+		case 28 ... 38: /* addr */
+			*val = vm->cpu.regs.addr[i-28];
+			break;
+		case 39 ... 49: /* ptr */
+			*val = vm->cpu.regs.ptr[i-39];
+			break;
 		default: return SAVM_ERROR_INVAL_ADDR;
 	}
 	return SAVM_ERROR_NONE;
@@ -77,7 +110,7 @@ savm_error_e savm_cpu_regread(savm_t* vm,uint64_t i,uint64_t* val) {
 
 savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val) {
 	switch(i) {
-		case 0: /* flags*/
+		case 0: /* flags */
 			vm->cpu.regs.flags = val;
 			break;
 		case 1: /* tmp */
@@ -88,6 +121,14 @@ savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val) {
 		case 4: /* pc */
 		case 5: /* cycle */
 			return SAVM_ERROR_INVAL_ADDR;
+		case 6 ... 16: /* data */
+			return vm->cpu.regs.data[i-6];
+		case 17 ... 27: /* index */
+			return vm->cpu.regs.index[i-17];
+		case 28 ... 38: /* addr */
+			return vm->cpu.regs.addr[i-28];
+		case 39 ... 49: /* ptr */
+			return vm->cpu.regs.ptr[i-39];
 		default: return SAVM_ERROR_INVAL_ADDR;
 	}
 	return SAVM_ERROR_NONE;
@@ -841,9 +882,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 			}
 			break;
 		case 27: /* JIT */
-			{
-				if(vm->cpu.regs.tmp) vm->cpu.regs.pc = addr;
-			}
+			if(vm->cpu.regs.tmp) vm->cpu.regs.pc = addr;
 			break;
 		case 28: /* JMPR */
 			{
@@ -1109,7 +1148,14 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 				if(err != SAVM_ERROR_NONE) return err;
 			}
 			break;
-		case 48: /* LDITBLR */
+		case 48: /* IRET */
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR) {
+				memcpy(&vm->cpu.regs,&vm->cpu.iregs,sizeof(savm_cpu_regs_t));
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_FAULT);
+				if(err != SAVM_ERROR_NONE) return err;
+			}
+		case 49: /* LDITBLR */
 			err = savm_cpu_regread(vm,addr,&addr);
 			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 			if(err == SAVM_ERROR_INVAL_ADDR) {
@@ -1128,7 +1174,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 				}
 			}
 			break;
-		case 49: /* LDITBLM */
+		case 50: /* LDITBLM */
 			err = savm_ioctl_read(vm,addr,&addr);
 			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
 			if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
@@ -1147,7 +1193,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 				}
 			}
 			break;
-		case 50: /* HLT */
+		case 51: /* HLT */
 			vm->cpu.running = 0;
 			break;
 		default:
@@ -1155,6 +1201,12 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 			if(err != SAVM_CPU_INT_BADINSTR) return err;
 			break;
 	}
+	
+	err = savm_rtc_cycle(&vm->rtc,vm);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	err = savm_mailbox_cycle(&vm->mailbox,vm);
+	if(err != SAVM_ERROR_NONE) return err;
 	
 	vm->cpu.regs.cycle++;
 	return SAVM_ERROR_NONE;

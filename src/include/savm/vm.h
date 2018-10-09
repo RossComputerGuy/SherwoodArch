@@ -1,6 +1,8 @@
 #ifndef __SAVM_VM_H_
 #define __SAVM_VM_H_ 1
 
+#include <savm/hardware/mailbox.h>
+#include <savm/hardware/rtc.h>
 #include <savm/error.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -19,7 +21,7 @@
 #endif
 
 #ifndef SAVM_CPU_IVT_SIZE
-#define SAVM_CPU_IVT_SIZE 5
+#define SAVM_CPU_IVT_SIZE 6
 #endif
 
 /* CPU -> IVT */
@@ -40,11 +42,43 @@
 #define SAVM_CPU_INT_DIVBYZERO 3
 #endif
 
-#ifndef SAVyM_CPU_INT_BADINSTR
+#ifndef SAVM_CPU_INT_BADINSTR
 #define SAVM_CPU_INT_BADINSTR 4
 #endif
 
-/* IO CTRL -> RAM*/
+#ifndef SAVM_CPU_INT_TIMER
+#define SAVM_CPU_INT_TIMER 5
+#endif
+
+/* IO CTRL -> Mailbox */
+
+#ifndef SAVM_IO_MAILBOX_BASE
+#define SAVM_IO_MAILBOX_BASE 0x10000000
+#endif
+
+#ifndef SAVM_IO_MAILBOX_SIZE
+#define SAVM_IO_MAILBOX_SIZE 0x00000006
+#endif
+
+#ifndef SAVM_IO_MAILBOX_END
+#define SAVM_IO_MAILBOX_END (SAVM_IO_MAILBOX_BASE+SAVM_IO_MAILBOX_SIZE)
+#endif
+
+/* IO CTRL -> RTC */
+
+#ifndef SAVM_IO_RTC_BASE
+#define SAVM_IO_RTC_BASE 0x10000007
+#endif
+
+#ifndef SAVM_IO_RTC_SIZE
+#define SAVM_IO_RTC_SIZE 0x00000007
+#endif
+
+#ifndef SAVM_IO_RTC_END
+#define SAVM_IO_RTC_END (SAVM_IO_RTC_BASE+SAVM_IO_RTC_SIZE)
+#endif
+
+/* IO CTRL -> RAM */
 
 #ifndef SAVM_IO_RAM_BASE
 #define SAVM_IO_RAM_BASE 0xA0000000
@@ -71,16 +105,25 @@ typedef struct {
 	savm_ioctl_write_p write;
 } savm_io_mmap_entry_t;
 
+typedef struct {
+	uint64_t flags; /* Flags */
+	uint64_t tmp; /* Temporary Data */
+	uint64_t sp; /* Stack Pointer */
+	uint64_t ip; /* Instruction Pointer */
+	uint64_t pc; /* Program Counter */
+	uint64_t cycle; /* Cycle counter */
+	uint64_t data[10]; /* Data */
+	uint64_t index[10]; /* Indexes */
+	uint64_t addr[10]; /* Addresses */
+	uint64_t ptr[10]; /* Pointers */
+} savm_cpu_regs_t;
+
 typedef struct savm {
 	struct {
-		struct {
-			uint64_t flags; /* Flags */
-			uint64_t tmp; /* Temporary Data */
-			uint64_t sp; /* Stack Pointer */
-			uint64_t ip; /* Instruction Pointer */
-			uint64_t pc; /* Program Counter */
-			uint64_t cycle; /* Cycle counter */
-		} regs;
+		savm_cpu_regs_t regs;
+		
+		/* The registers before the interrupt */
+		savm_cpu_regs_t iregs;
 		
 		uint64_t stack[SAVM_CPU_STACK_SIZE];
         uint64_t ivt[SAVM_CPU_IVT_SIZE];
@@ -93,6 +136,9 @@ typedef struct savm {
 		size_t mmapSize;
 		savm_io_mmap_entry_t* mmap;
 	} io;
+	
+	savm_mailbox_t mailbox;
+	savm_rtc_t rtc;
 } savm_t;
 
 savm_error_e savm_create(savm_t* vm);
