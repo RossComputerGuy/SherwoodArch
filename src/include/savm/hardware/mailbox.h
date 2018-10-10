@@ -27,7 +27,6 @@ typedef struct {
 typedef struct savm_mailbox_dev {
 	savm_mailbox_devhdr_t hdr;
 	char name[128];
-	size_t size;
 	void* impl;
 	
 	savm_mailbox_read_p read;

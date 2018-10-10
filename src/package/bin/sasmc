@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+
+const compile = require("../assembler");
+const fs = require("fs");
+const program = require("commander")
+	.version("1.0.0")
+	.usage("[options] <file ...>")
+	.option("-v, --verbose","Produce verbose output")
+	.option("-o, --output <file>","Output to FILE instead of a.out","a.out")
+	.parse(process.argv);
+
+var programs = [];
+for(var i = 0;i < program.args.length;i++) {
+	if(program.verbose) console.log("Compiling "+program.args[i]);
+	programs[i] = compile(fs.readFileSync(program.args[i]).toString(),{ verbose: program.verbose });
+}
+var totalProgramSize = 0;
+for(var i = 0;i < programs.length;i++) totalProgramSize += programs[i].length;
+if(program.verbose) console.log("Total Size of Binary: "+totalProgramSize+" Bytes");
+var prog = Buffer.alloc(totalProgramSize);
+var addr = 0;
+for(var i = 0;i < programs.length;i++) {
+	for(var x = 0;x < programs[i].length;x++) prog[addr++] = programs[i][x];
+}
+if(program.verbose) console.log("Writing to "+program.output);
+fs.writeFileSync(program.output,Buffer.from(prog));

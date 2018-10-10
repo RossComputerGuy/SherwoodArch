@@ -64,6 +64,8 @@ savm_error_e savm_reset(savm_t* vm) {
 	
 	/* Reset the CPU */
 	memset(vm->cpu.stack,0,sizeof(uint64_t)*SAVM_CPU_STACK_SIZE);
+	memset(vm->cpu.ivt,0,sizeof(uint64_t)*SAVM_CPU_IVT_SIZE);
+	vm->cpu.intr = 0;
 	vm->cpu.running = 0;
 	return SAVM_ERROR_NONE;
 }
@@ -154,7 +156,6 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	if(err != SAVM_ERROR_NONE) return err;
 	
 	/* Decodes the instruction */
-	uint64_t instr = vm->cpu.regs.ip;
 	uint64_t addr;
 	uint64_t val;
 	
@@ -167,7 +168,7 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	vm->cpu.regs.pc += 3;
 	
 	/* Execute the instruction */
-	switch(instr) {
+	switch(vm->cpu.regs.ip) {
 		case 0: /* NOP */
 			vm->cpu.running = 0;
 			break;
