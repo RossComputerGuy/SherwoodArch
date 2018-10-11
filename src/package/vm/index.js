@@ -376,6 +376,12 @@ class VirtualMachine extends EventEmitter {
 				case 51: /* HLT */
 					this.stop();
 					break;
+				case 52: /* RST */
+					this.stop();
+					this.reset();
+					this.start();
+					this.cpu.regs.cycle[0] = -1;
+					break;
 				default:
 					this.intr(CPU_INT["BADINSTR"]);
 			}

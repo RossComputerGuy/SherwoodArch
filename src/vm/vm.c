@@ -1211,6 +1211,11 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 		case 51: /* HLT */
 			vm->cpu.running = 0;
 			break;
+		case 52: /* RST */
+			err = savm_reset(vm);
+			if(err != SAVM_ERROR_NONE) return err;
+			vm->cpu.running = 1;
+			vm->cpu.regs.cycle = -1;
 		default:
 			err = savm_cpu_intr(vm,val);
 			if(err != SAVM_CPU_INT_BADINSTR) return err;

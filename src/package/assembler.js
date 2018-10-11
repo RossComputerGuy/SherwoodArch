@@ -8,7 +8,7 @@ const INSTRUCTION_SET = [
 	"andr","andm","orr","orm","xorr","xorm","norr","norm","nandr","nandm","lshiftr","lshiftm","rshiftr","rshiftm",
 	"cmpr","cmpm","jitr","jitm","jit","jmpr","jmpm","jmp","callr","callm","call","ret",
 	"pushr","pushm","popr","popm","movrr","movrm","movmr","movmm","stor","stom",
-	"intr","intm","int","iret","lditblr","lditblm","hlt"
+	"intr","intm","int","iret","lditblr","lditblm","hlt","rst"
 ];
 
 const REGISTERS = (() => {
@@ -21,7 +21,15 @@ const REGISTERS = (() => {
 })();
 
 function compileOpcode(str,opts) {
-	if(str[0]+str[1] == "0x") return parseInt(str.slice(2),16);
+	var isMemoryAddress = false;
+	if(str[0] == "$") {
+		str = str.replace("$","");
+		isMemoryAddress = true;
+	}
+	if(str[0]+str[1] == "0x") {
+		if(isMemoryAddress && parseInt(str.slice(2),16) > 0xFFFFFFFFFFFFFFFF) throw new Error("Cannot access beyond 64-Bit limit");
+		return parseInt(str.slice(2),16);
+	}
 	if(str[0]+str[1] == "0b") return parseInt(str.slice(2),2);
 	if(str[0] == "%") {
 		str = str.replace("%","");
@@ -39,6 +47,7 @@ function compileOpcode(str,opts) {
 		if(str[0] == '\'' && str[str.length-1] == '\'') str = str.slice(1,-1);
 		return Buffer.from(str)[0];
 	}
+	if(isMemoryAddress && parseInt(str) > 0xFFFFFFFFFFFFFFFF) throw new Error("Cannot access beyond 64-Bit limit");
 	return parseInt(str);
 }
 

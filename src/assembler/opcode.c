@@ -4,6 +4,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define INSTRUCTION_SET_SIZE 53
+
+const char* instruction_set[INSTRUCTION_SET_SIZE] = {
+	"nop","addr","addm","subr","subm","mulr","mulm","divr","divm",
+	"andr","andm","orr","orm","xorr","xorm","norr","norm","nandr","nandm","lshiftr","lshiftm","rshiftr","rshiftm",
+	"cmpr","cmpm","jitr","jitm","jit","jmpr","jmpm","jmp","callr","callm","call","ret",
+	"pushr","pushm","popr","popm","movrr","movrm","movmr","movmm","stor","stom",
+	"intr","intm","int","iret","lditblr","lditblm","hlt","rst"
+};
+
 /* Added since strwr is not included in libc */
 char* strlwr(char* str) {
 	for(size_t i = 0;i < strlen(str);i++) str[i] = tolower(str[i]);
@@ -22,67 +32,27 @@ uint64_t string2int(char* str) {
 }
 
 uint64_t string2opcode(char* str) {
-	if(strstr(str," ") != NULL) {
-		str = strtok(str," ");
-		if(str == NULL) return false;
-		while(str[0] == ' ') str++;
+	char* str2 = malloc(strlen(str));
+	if(str2 == NULL) return 0xFFFF;
+	strcpy(str2,str);
+	
+	if(strstr(str2," ") != NULL) {
+		str2 = strtok_r(str," ",&str2);
+		if(str2 == NULL) goto error;
+		while(str2[0] == ' ') str++;
 	}
-	str = strlwr(str);
-	if(str == NULL) return false;
+	str2 = strlwr(str2);
+	if(str2 == NULL) goto error;
 	
 	/* Check if the string matches the opcode name */
-	if(!strcmp(str,"nop")) return 0;
-	if(!strcmp(str,"addr")) return 1;
-	if(!strcmp(str,"addm")) return 2;
-	if(!strcmp(str,"subr")) return 3;
-	if(!strcmp(str,"subm")) return 4;
-	if(!strcmp(str,"mulr")) return 5;
-	if(!strcmp(str,"mulm")) return 6;
-	if(!strcmp(str,"divr")) return 7;
-	if(!strcmp(str,"divm")) return 8;
-	if(!strcmp(str,"andr")) return 9;
-	if(!strcmp(str,"andm")) return 10;
-	if(!strcmp(str,"orr")) return 11;
-	if(!strcmp(str,"orm")) return 12;
-	if(!strcmp(str,"xorr")) return 13;
-	if(!strcmp(str,"xorm")) return 14;
-	if(!strcmp(str,"norr")) return 15;
-	if(!strcmp(str,"norm")) return 16;
-	if(!strcmp(str,"nandr")) return 17;
-	if(!strcmp(str,"nandm")) return 18;
-	if(!strcmp(str,"lshiftr")) return 19;
-	if(!strcmp(str,"lshiftm")) return 20;
-	if(!strcmp(str,"rshiftr")) return 21;
-	if(!strcmp(str,"rshiftm")) return 22;
-	if(!strcmp(str,"cmpr")) return 23;
-	if(!strcmp(str,"cmpm")) return 24;
-	if(!strcmp(str,"jitr")) return 25;
-	if(!strcmp(str,"jitm")) return 26;
-	if(!strcmp(str,"jit")) return 27;
-	if(!strcmp(str,"jmpr")) return 28;
-	if(!strcmp(str,"jmpm")) return 29;
-	if(!strcmp(str,"jmp")) return 30;
-	if(!strcmp(str,"callr")) return 31;
-	if(!strcmp(str,"callm")) return 32;
-	if(!strcmp(str,"call")) return 33;
-	if(!strcmp(str,"ret")) return 34;
-	if(!strcmp(str,"pushr")) return 35;
-	if(!strcmp(str,"pushm")) return 36;
-	if(!strcmp(str,"popr")) return 37;
-	if(!strcmp(str,"popm")) return 38;
-	if(!strcmp(str,"movrr")) return 39;
-	if(!strcmp(str,"movrm")) return 40;
-	if(!strcmp(str,"movmr")) return 41;
-	if(!strcmp(str,"movmm")) return 42;
-	if(!strcmp(str,"stor")) return 43;
-	if(!strcmp(str,"stom")) return 44;
-	if(!strcmp(str,"intr")) return 45;
-	if(!strcmp(str,"intm")) return 46;
-	if(!strcmp(str,"int")) return 47;
-	if(!strcmp(str,"iret")) return 48;
-	if(!strcmp(str,"lditblr")) return 49;
-	if(!strcmp(str,"lditblm")) return 50;
-	if(!strcmp(str,"hlt")) return 51;
+	for(size_t i = 0;i < INSTRUCTION_SET_SIZE;i++) {
+		if(!strcmp(str2,instruction_set[i])) {
+			free(str2);
+			return i;
+		}
+	}
+error:
+	free(str2);
 	return 0xFFFF;
 }
 
@@ -96,10 +66,12 @@ uint64_t* compileinstr(char* str,bool verbose) {
 	uint64_t val = 0;
 	
 	if((opcode >= 1 && opcode < 27) || opcode == 28 || opcode == 29 || opcode == 31 || opcode == 32 || (opcode >= 35 && opcode < 47)) {
-		char* addrStr = strtok(NULL,", ");
+		char* addrStr;
+		strtok_r(str,", ",&addrStr);
 		if(addrStr == NULL) return NULL;
 		
-		char* valStr = strtok(NULL,", ");
+		char* valStr;
+		strtok_r(str,", ",&valStr);
 		if(valStr == NULL) return NULL;
 		
 		addr = string2int(addrStr);
@@ -107,7 +79,7 @@ uint64_t* compileinstr(char* str,bool verbose) {
 	}
 	
 	if(opcode == 27 || opcode == 30 || opcode == 33 || (opcode >= 47 && opcode < 51)) {
-		addr = string2int(strtok(NULL," "));
+		addr = string2int(strtok(str," "));
 	}
 	
 	if(verbose) printf("Compiled instruction: 0x%x 0x%x 0x%x\n",opcode,addr,val);
@@ -117,8 +89,10 @@ uint64_t* compileinstr(char* str,bool verbose) {
 
 size_t getcompiledsize(char* str) {
 	int lineCount = 0;
-	for(size_t i = 0;i < strlen(str);i++) {
-		if(str[i] == '\n') lineCount++;
+	char* pch = strtok(str,"\n");
+	while(pch != NULL) {
+		if(!!strcmp(pch,"\n") && pch[0] != '#') lineCount++;
+		pch = strtok(NULL,"\n");
 	}
 	return lineCount*3;
 }
@@ -130,14 +104,16 @@ uint64_t* compilestr(char* str,bool verbose) {
 	size_t index = 0;
 	char* pch = strtok(str,"\n");
 	while(pch != NULL) {
-		uint64_t* opcode = compileinstr(pch,verbose);
-		if(opcode == NULL) {
-			free(instrs);
-			return NULL;
-		}
-		for(size_t i = 0;i < 3;i++) {
-			printf("%d: 0x%x\n",index,opcode[i]);
-			instrs[index++] = opcode[i];
+		if(!!strcmp(pch,"\n") && pch[0] != '#') {
+			uint64_t* opcode = compileinstr(pch,verbose);
+			if(opcode == NULL) {
+				free(instrs);
+				return NULL;
+			}
+			for(size_t i = 0;i < 3;i++) {
+				printf("%d: 0x%x\n",index,opcode[i]);
+				instrs[index++] = opcode[i];
+			}
 		}
 		pch = strtok(NULL,"\n");
 	}
