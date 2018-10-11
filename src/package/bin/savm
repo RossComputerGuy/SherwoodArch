@@ -11,7 +11,7 @@ const program = require("commander")
 	.parse(process.argv);
 
 var vm = new VirtualMachine();
-vm.cpu.clockspeed = program.clockspeed
+vm.cpu.clockspeed = program.clockspeed;
 vm.reset();
 vm.uart.on("output",(str) => process.stdout.write(str));
 if(program.ram && fs.existsSync(program.ram)) vm.loadFile(0xA0000000,program.ram);
