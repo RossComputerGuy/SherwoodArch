@@ -1,4 +1,6 @@
+const EventEmitter = require("events");
 const fs = require("fs");
+const jints = require("jints");
 const Mailbox = require("./hardware/mailbox");
 const RTC = require("./hardware/rtc");
 const UART = require("./hardware/uart");
@@ -33,8 +35,9 @@ function setupRegisters() {
 	};
 }
 
-class VirtualMachine {
+class VirtualMachine extends EventEmitter {
 	constructor(opts = {}) {
+		super();
 		this.cpu = {
 			regs: setupRegisters(),
 			iregs: setupRegisters(),
@@ -42,7 +45,8 @@ class VirtualMachine {
 			stack: new Float64Array(20),
 			ivt: new Float64Array(6),
 			intr: new Float64Array(1),
-			running: false
+			running: false,
+			clockspeed: 1
 		};
 		this.ioctl = {
 			ram: new Float64Array(IO_RAM_SIZE),
@@ -171,7 +175,7 @@ class VirtualMachine {
 		try {
 			switch(this.cpu.regs.ip[0]) {
 				case 0: /* NOP */
-					this.cpu.running = false;
+					this.stop();
 					break;
 				case 1: /* ADDR */
 					this.regwrite(addr,this.regread(addr)+this.regread(val));
@@ -363,7 +367,7 @@ class VirtualMachine {
 					for(var i = 0;i < this.cpu.ivt.length;i++) this.cpu.ivt[i] = this.read(addr+i);
 					break;
 				case 51: /* HLT */
-					this.cpu.running = false;
+					this.stop();
 					break;
 				default:
 					this.intr(CPU_INTR["BADINSTR"]);
@@ -380,14 +384,53 @@ class VirtualMachine {
 		this.cpu.regs.cycle[0]++;
 	}
 	
+	_buff2uint64(buff) {
+		var u64 = new Float64Array(buff.length/8);
+		var index = 0;
+		for(var i = 0;i < buff.length;i += 8) {
+			var b = buff.slice(i,i+8);
+			var arr = new Int32Array(new Uint8Array(buff.slice(i,i+8)).buffer);
+			var v = new jints.UInt64.join(arr[1],arr[0]);
+			v = parseInt(v.toString());
+			u64[index++] = v;
+		}
+		return u64;
+	}
+	_uint642buff(u64) {
+		var buff = Buffer.alloc(u64.length*8);
+		var index = 0;
+		for(var i = 0;i < u64.length;i++) {
+			var arr = new jints.UInt64(u64[i]).toArray();
+			for(var x = 0;x < 8;x++) buff[index++] = arr[x];
+		}
+		return buff;
+	}
+	
+	start() {
+		this.cpu.running = true;
+		this.emit("cpu/start");
+		this.interval = setInterval(() => {
+			this.cycle();
+			if(!this.cpu.running) this.stop();
+		},this.cpu.clockspeed);
+	}
+	stop() {
+		if(typeof(this.interval) == "number") clearInterval(this.interval);
+		this.cpu.running = false;
+		this.emit("cpu/stop");
+	}
+	loadFirmware(path) {
+		var buff = this._buff2uint64(fs.readFileSync(path));
+		for(var i = 0;i < buff.length;i++) this.ioctl.ram[i] = buff[i];
+	}
 	loadFile(addr,path) {
-		var buff = new Float64Array(fs.readFileSync(path));
+		var buff = this._buff2uint64(fs.readFileSync(path));
 		for(var i = 0;i < buff.length;i++) this.write(addr,buff[i]);
 	}
 	dumpFile(addr,size,path) {
 		var buff = new Float64Array(size);
 		for(var i = 0;i < buff.length;i++) buff[i] = this.read(i);
-		fs.writeFileSync(path,buff);
+		fs.writeFileSync(path,this._uint642buff(buff));
 	}
 	mmap(addr,end,read = () => 0,write = () => {}) {
 		for(var entry of this.ioctl.mmap) {

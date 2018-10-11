@@ -9,6 +9,12 @@
   "author": "Spaceboy Ross",
   "license": "Apache-2.0",
   "dependencies": {
-    "commander": "^2.19.0"
+    "commander": "^2.19.0",
+    "jints": "^1.0.5",
+    "struct-fu": "^1.2.1"
+  },
+  "bin": {
+    "sasmc": "./bin/sasmc",
+    "savm": "./bin/savm"
   }
 }

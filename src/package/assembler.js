@@ -1,4 +1,6 @@
 const fs = require("fs");
+const jints = require("jints");
+const utils = require("./utils");
 const vm = require("vm");
 
 const INSTRUCTION_SET = [
@@ -9,9 +11,23 @@ const INSTRUCTION_SET = [
 	"intr","intm","int","iret","lditblr","lditblm","hlt"
 ];
 
+const REGISTERS = (() => {
+	var r = ["flags","tmp","sp","ip","pc","cycle"];
+	var bigr = ["data","index","addr","ptr"];
+	for(var br of bigr) {
+		for(var i = 0;i < 10;i++) r.push(br+i);
+	}
+	return r;
+})();
+
 function compileOpcode(str,opts) {
 	if(str[0]+str[1] == "0x") return parseInt(str.slice(2),16);
 	if(str[0]+str[1] == "0b") return parseInt(str.slice(2),2);
+	if(str[0] == "%") {
+		str = str.replace("%","");
+		if(REGISTERS.indexOf(str) == -1) throw new Error("Invalid register "+str);
+		return REGISTERS.indexOf(str);
+	}
 	if(str[0] == "\'" && str[str.length-1] == "\'") {
 		if(str.length != 3 && str.length != 4) throw new Error("Failed to compile character");
 		if(str.length == 4 && str[1] != "\\") throw new Error("Failed to compile character");
@@ -21,33 +37,43 @@ function compileOpcode(str,opts) {
 			str = sb.result;
 		}
 		if(str[0] == '\'' && str[str.length-1] == '\'') str = str.slice(1,-1);
-		console.log(str);
-		return Buffer.from([str])[0];
+		return Buffer.from(str)[0];
 	}
 	return parseInt(str);
 }
 
 function compileLine(str,opts) {
-	str = str.split(", ").join(",").split(",").join(" ");
+	str = str.split(", ",2).join(",").split(",",2).join(" ");
 	var opcodes = str.split(" ",3);
 	opcodes[0] = opcodes[0].toLowerCase();
-	var instr = new Float64Array(3);
+	var instr = [0,0,0];
 	if(INSTRUCTION_SET.indexOf(opcodes[0]) == -1) throw new Error("No instruction called \""+opcodes[0]+"\" exists");
-	instr[0] = INSTRUCTION_SET.indexOf(opcodes[0]);
+	instr[0] = new jints.UInt64(INSTRUCTION_SET.indexOf(opcodes[0]));
 	for(var i = 1;i < opcodes.length;i++) instr[i] = compileOpcode(opcodes[i],opts);
 	if(opts.verbose) console.log("Compiled Line: "+instr[0]+" "+instr[1]+", "+instr[2]);
-	return instr;
+	for(var i = 0;i < instr.length;i++) {
+		if(!(instr[i] instanceof jints.UInt64)) instr[i] = new jints.UInt64(instr[i]);
+	}
+	for(var i = 0;i < instr.length;i++) instr[i] = instr[i].toArray();
+	var buff = Buffer.alloc(3*8);
+	var index = 0;
+	for(var i = 0;i < instr.length;i++) {
+		for(var x = 0;x < 8;x++) buff[index++] = instr[i][x];
+	}
+	return buff;
 }
 
 function compileString(str,opts) {
 	var lines = str.split("\n");
-	var instrs = new Float64Array(lines.length*3);
+	for(var i = 0;i < lines.length;i++) {
+		if(lines[i].length <= 1 || lines[i][0] == "#") lines.splice(i,1);
+	}
+	var instrs = Buffer.alloc((lines.length*3)*8);
+	instrs.fill(0);
 	var index = 0;
 	for(var line of lines) {
-		if(line.length > 0) {
-			var instr = compileLine(line,opts);
-			for(var i = 0;i < 3;i++) instrs[index++] = instr[i];
-		}
+		var instr = compileLine(line,opts);
+		for(var i = 0;i < 8*3;i++) instrs[index++] = instr[i];
 	}
 	return instrs;
 }
