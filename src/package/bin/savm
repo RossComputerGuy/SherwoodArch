@@ -13,6 +13,12 @@ const program = require("commander")
 var vm = new VirtualMachine();
 vm.cpu.clockspeed = program.clockspeed;
 vm.reset();
+process.stdin.setRawMode(true);
+process.stdin.resume();
+process.stdin.on("data",buff => {
+	if(buff == "\u0003") vm.stop();
+	vm.uart.emit("input",buff.toString());
+});
 vm.uart.on("output",(str) => process.stdout.write(str));
 if(program.ram && fs.existsSync(program.ram)) vm.loadFile(0xA0000000,program.ram);
 if(program.firmware) vm.loadFirmware(program.firmware);

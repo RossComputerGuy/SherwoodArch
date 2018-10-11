@@ -4,7 +4,7 @@
   "description": "The Sherwood Architecture for Node.js",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "npm install && browserify ./index.js -o dist/sa.js"
   },
   "author": "Spaceboy Ross",
   "license": "Apache-2.0",
@@ -12,6 +12,9 @@
     "commander": "^2.19.0",
     "jints": "^1.0.5",
     "struct-fu": "^1.2.1"
+  },
+  "devDependencies": {
+    "browserify": "^16.2.3"
   },
   "bin": {
     "sasmc": "./bin/sasmc",

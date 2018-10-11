@@ -62,6 +62,7 @@ class VirtualMachine extends EventEmitter {
 		if(this.mailbox) this.mailbox.destroy(this);
 		if(this.rtc) this.rtc.destroy(this);
 		if(this.uart) this.uart.destroy(this);
+		this.emit("destroy");
 	}
 	reset() {
 		/* (Re)initialize the RAM */
@@ -90,20 +91,25 @@ class VirtualMachine extends EventEmitter {
 		this.cpu.ivt.fill(0);
 		this.cpu.intr[0] = 0;
 		this.cpu.running = false;
+		
+		this.emit("reset");
 	}
 	
 	intr(i) {
 		if(i > this.cpu.ivt.length) throw new Error("SAVM_ERROR_INVAL_INT");
 		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) {
 			this.cpu.intr[0] = CPU_INT["FAULT"];
-			return;
+			return this.emit("cpu/interrupt",i);
 		}
 		this.cpu.iregs = this.cpu.regs;
 		this.cpu.regs.flags[0] |= CPU_REG_FLAG_INTR;
 		this.cpu.intr[0] = i;
 		this.cpu.regs.pc[0] = this.cpu.ivt[i];
+		
+		this.emit("cpu/interrupt",i);
 	}
 	regread(i) {
+		this.emit("cpu/registers/read",i);
 		switch(i) {
 			case 0: /* flags */ return this.cpu.regs.flags[0];
 			case 1: /* tmp */ return this.cpu.regs.tmp[0];
@@ -158,6 +164,7 @@ class VirtualMachine extends EventEmitter {
 				}
 				throw new Error("SAVM_ERROR_INVAL_ADDR");
 		}
+		this.emit("cpu/registers/write",i,v);
 	}
 	cycle() {
 		if(this.cpu.regs.pc[0] == 0) this.cpu.regs.pc[0] = IO_RAM_BASE+(this.cpu.regs.cycle[0]*3);
@@ -279,39 +286,39 @@ class VirtualMachine extends EventEmitter {
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) {
 						this.cpu.stack[this.cpu.regs.sp[0]++] = this.cpu.regs.pc[0];
 						this.cpu.regs.pc[0] = this.regread(addr);
-					} else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 32: /* CALLM */
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) {
 						this.cpu.stack[this.cpu.regs.sp[0]++] = this.cpu.regs.pc[0];
 						this.cpu.regs.pc[0] = this.read(addr);
-					} else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 33: /* CALL */
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) {
 						this.cpu.stack[this.cpu.regs.sp[0]++] = this.cpu.regs.pc[0];
 						this.cpu.regs.pc[0] = addr;
-					} else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 34: /* RET */
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.cpu.regs.pc[0] = this.cpu.stack[this.cpu.regs.sp[0]--];
-					else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 35: /* PUSHR */
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.cpu.stack[this.cpu.regs.sp[0]++] = this.regread(addr);
-					else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 36: /* PUSHM */
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.cpu.stack[this.cpu.regs.sp[0]++] = this.read(addr);
-					else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 37: /* POPR */
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.regwrite(addr,this.cpu.stack[this.cpu.regs.sp[0]--]);
-					else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 38: /* POPM */
 					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.write(addr,this.cpu.stack[this.cpu.regs.sp[0]--]);
-					else this.intr(CPU_INTR["STACK_OVERFLOW"]);
+					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 39: /* MOVRR */
 					this.regwrite(addr,this.regread(val));
@@ -336,7 +343,7 @@ class VirtualMachine extends EventEmitter {
 					try {
 						this.intr(a);
 					} catch(ex) {
-						this.intr(CPU_INTR["BADADDR"]);
+						this.intr(CPU_INT["BADADDR"]);
 					}
 					break;
 				case 46: /* INTM */
@@ -344,19 +351,19 @@ class VirtualMachine extends EventEmitter {
 					try {
 						this.intr(a);
 					} catch(ex) {
-						this.intr(CPU_INTR["BADADDR"]);
+						this.intr(CPU_INT["BADADDR"]);
 					}
 					break;
 				case 47: /* INT */
 					try {
 						this.intr(addr);
 					} catch(ex) {
-						this.intr(CPU_INTR["BADADDR"]);
+						this.intr(CPU_INT["BADADDR"]);
 					}
 					break;
 				case 48: /* IRET */
 					if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.regs = this.cpu.iregs;
-					else this.intr(CPU_INTR["FAULT"]);
+					else this.intr(CPU_INT["FAULT"]);
 					break;
 				case 49: /* LDITBLR */
 					addr = this.regread(addr);
@@ -370,16 +377,18 @@ class VirtualMachine extends EventEmitter {
 					this.stop();
 					break;
 				default:
-					this.intr(CPU_INTR["BADINSTR"]);
+					this.intr(CPU_INT["BADINSTR"]);
 			}
 		} catch(ex) {
-			if(ex.message == "SAVM_ERROR_NOTMAPPED") this.intr(CPU_INTR["BADADDR"]);
+			if(ex.message == "SAVM_ERROR_NOTMAPPED") this.intr(CPU_INT["BADADDR"]);
 			else throw ex;
 		}
 		
 		if(this.rtc) this.rtc.cycle(this);
 		if(this.mailbox) this.mailbox.cycle(this);
 		if(this.uart) this.uart.cycle(this);
+		
+		this.emit("cpu/cycle");
 		
 		this.cpu.regs.cycle[0]++;
 	}
@@ -436,14 +445,16 @@ class VirtualMachine extends EventEmitter {
 		for(var entry of this.ioctl.mmap) {
 			if(entry.addr == addr && entry.end == end) throw new Error("SAVM_ERROR_MAPPED");
 		}
-		this.ioctl.mmap.push({
+		var i = this.ioctl.mmap.push({
 			addr: addr,
 			end: end,
 			read: read,
 			write: write
-		});
+		})-1;
+		this.emit("ioctl/mmap",addr,end,i);
 	}
 	read(addr) {
+		this.emit("ioctl/read",addr);
 		for(var entry of this.ioctl.mmap) {
 			if(entry.addr <= addr && entry.end > addr) return entry.read(addr-entry.addr);
 		}
@@ -451,7 +462,10 @@ class VirtualMachine extends EventEmitter {
 	}
 	write(addr,v) {
 		for(var entry of this.ioctl.mmap) {
-			if(entry.addr <= addr && entry.end > addr) return entry.write(addr-entry.addr,v);
+			if(entry.addr <= addr && entry.end > addr) {
+				entry.write(addr-entry.addr,v);
+				return this.emit("ioctl/write",addr,v);
+			}
 		}
 		throw new Error("SAVM_ERROR_NOTMAPPED");
 	}

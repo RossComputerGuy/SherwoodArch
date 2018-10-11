@@ -9,6 +9,10 @@ class UART extends EventEmitter {
 		super();
 		
 		this.input = [];
+		
+		this.on("input",(d) => {
+			this.input.push(d);
+		});
 	}
 	destroy() {}
 	reset(vm) {
@@ -26,7 +30,6 @@ class UART extends EventEmitter {
 		});
 	}
 	cycle(vm) {
-		this.emit("input",this);
 	}
 }
 module.exports = UART;
