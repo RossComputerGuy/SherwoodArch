@@ -22,6 +22,7 @@ savm_error_e savm_create(savm_t* vm) {
 }
 
 savm_error_e savm_destroy(savm_t* vm) {
+	if(vm->cpu.irqs != NULL) free(vm->cpu.irqs);
 	if(vm->io.ram != NULL) free(vm->io.ram);
 	if(vm->io.mmap != NULL) free(vm->io.mmap);
 	
@@ -65,6 +66,8 @@ savm_error_e savm_reset(savm_t* vm) {
 	/* Reset the CPU */
 	memset(vm->cpu.stack,0,sizeof(uint64_t)*SAVM_CPU_STACK_SIZE);
 	memset(vm->cpu.ivt,0,sizeof(uint64_t)*SAVM_CPU_IVT_SIZE);
+	if(vm->cpu.irqs != NULL) free(vm->cpu.irqs);
+	vm->cpu.irqSize = 0;
 	vm->cpu.intr = 0;
 	vm->cpu.running = 0;
 	return SAVM_ERROR_NONE;
@@ -73,10 +76,32 @@ savm_error_e savm_reset(savm_t* vm) {
 /* CPU */
 savm_error_e savm_cpu_intr(savm_t* vm,uint64_t intr) {
 	if(intr > SAVM_CPU_IVT_SIZE) return SAVM_ERROR_INVAL_INT;
+	if(intr > 4 && vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_ENIRQ && vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR) {
+		size_t i = -1;
+		if(vm->cpu.irqs == NULL || vm->cpu.irqSize < 1) {
+			i = 0;
+			vm->cpu.irqSize = 1;
+			vm->cpu.irqs = malloc(sizeof(uint64_t));
+		}
+		for(size_t x = 0;x < vm->cpu.irqSize;x++) {
+			if(vm->cpu.irqs[x] == -1) {
+				i = x;
+				break;
+			}
+		}
+		if(i == -1) {
+			i = vm->cpu.irqSize++;
+			vm->cpu.irqs = realloc(vm->cpu.irqs,sizeof(uint64_t)*vm->cpu.irqSize);
+		}
+		if(vm->cpu.irqs == NULL) return SAVM_ERROR_MEM;
+		vm->cpu.irqs[i] = intr;
+		return SAVM_ERROR_NONE;
+	}
 	if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR) {
 		vm->cpu.intr = SAVM_CPU_INT_FAULT;
 		return SAVM_ERROR_NONE;
 	}
+	if(intr > 4 && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_ENIRQ)) return SAVM_ERROR_NONE;
 	memcpy(&vm->cpu.iregs,&vm->cpu.regs,sizeof(savm_cpu_regs_t));
 	vm->cpu.regs.flags |= SAVM_CPU_REG_FLAG_INTR;
 	vm->cpu.intr = intr;
@@ -124,6 +149,7 @@ savm_error_e savm_cpu_regread(savm_t* vm,uint64_t i,uint64_t* val) {
 savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val) {
 	switch(i) {
 		case 0: /* flags */
+			if(val & SAVM_CPU_REG_FLAG_INTR && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR)) val &= ~SAVM_CPU_REG_FLAG_INTR;
 			vm->cpu.regs.flags = val;
 			break;
 		case 1: /* tmp */
@@ -1230,6 +1256,13 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 	
 	err = savm_uart_cycle(&vm->uart,vm);
 	if(err != SAVM_ERROR_NONE) return err;
+	
+	if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR && vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_ENIRQ && vm->cpu.irqSize > 0) {
+		uint64_t irq = vm->cpu.irqs[0];
+		vm->cpu.irqs[0] = -1;
+		err = savm_cpu_intr(vm,irq);
+		if(err != SAVM_ERROR_NONE) return err;
+	}
 	
 	vm->cpu.regs.cycle++;
 	return SAVM_ERROR_NONE;

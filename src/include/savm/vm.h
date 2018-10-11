@@ -16,6 +16,10 @@
 #define SAVM_CPU_REG_FLAG_INTR (1 << 0)
 #endif
 
+#ifndef SAVM_CPU_REG_FLAG_ENIRQ
+#define SAVM_CPU_REG_FLAG_ENIRQ (1 << 1)
+#endif
+
 /* CPU -> sizes */
 
 #ifndef SAVM_CPU_STACK_SIZE
@@ -23,7 +27,7 @@
 #endif
 
 #ifndef SAVM_CPU_IVT_SIZE
-#define SAVM_CPU_IVT_SIZE 6
+#define SAVM_CPU_IVT_SIZE 7
 #endif
 
 /* CPU -> IVT */
@@ -50,6 +54,10 @@
 
 #ifndef SAVM_CPU_INT_TIMER
 #define SAVM_CPU_INT_TIMER 5
+#endif
+
+#ifndef SAVM_CPU_INT_MAILBOX
+#define SAVM_CPU_INT_MAILBOX 6
 #endif
 
 /* IO CTRL -> Mailbox */
@@ -145,6 +153,9 @@ typedef struct savm {
         uint64_t ivt[SAVM_CPU_IVT_SIZE];
         uint64_t intr;
 		int running;
+		
+		uint64_t* irqs;
+		size_t irqSize;
 	} cpu;
 	struct {
 		uint64_t* ram;

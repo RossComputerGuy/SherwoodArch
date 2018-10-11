@@ -6,6 +6,7 @@ const RTC = require("./hardware/rtc");
 const UART = require("./hardware/uart");
 
 const CPU_REG_FLAG_INTR = (1 << 0);
+const CPU_REG_FLAG_ENIRQ = (1 << 1);
 
 const CPU_INT = {
 	"STACK_OVERFLOW": 0,
@@ -13,7 +14,8 @@ const CPU_INT = {
 	"BADADDR": 2,
 	"DIVBYZERO": 3,
 	"BADINSTR": 4,
-	"TIMER": 5
+	"TIMER": 5,
+	"MAILBOX": 6
 };
 
 const IO_RAM_BASE = 0xA0000000;
@@ -46,7 +48,8 @@ class VirtualMachine extends EventEmitter {
 			ivt: new Float64Array(6),
 			intr: new Float64Array(1),
 			running: false,
-			clockspeed: 1
+			clockspeed: 1,
+			irqs: []
 		};
 		this.ioctl = {
 			ram: new Float64Array(IO_RAM_SIZE),
@@ -87,6 +90,7 @@ class VirtualMachine extends EventEmitter {
 		this.cpu.regs = this.cpu.iregs = setupRegisters();
 		
 		/* Reset the CPU */
+		this.cpu.irqs = [];
 		this.cpu.stack.fill(0);
 		this.cpu.ivt.fill(0);
 		this.cpu.intr[0] = 0;
@@ -97,10 +101,12 @@ class VirtualMachine extends EventEmitter {
 	
 	intr(i) {
 		if(i > this.cpu.ivt.length) throw new Error("SAVM_ERROR_INVAL_INT");
+		if(i > 4 && this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ) return this.cpu.irqs.push(i);
 		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) {
 			this.cpu.intr[0] = CPU_INT["FAULT"];
 			return this.emit("cpu/interrupt",i);
 		}
+		if(i > 4 && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ)) return;
 		this.cpu.iregs = this.cpu.regs;
 		this.cpu.regs.flags[0] |= CPU_REG_FLAG_INTR;
 		this.cpu.intr[0] = i;
@@ -128,6 +134,7 @@ class VirtualMachine extends EventEmitter {
 	regwrite(i,v) {
 		switch(i) {
 			case 0: /* flags */
+				if(val & CPU_REG_FLAG_INTR && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR)) val &= ~CPU_REG_FLAG_INTR;
 				this.cpu.regs.flags[0] = v;
 				break;
 			case 1: /* tmp */
@@ -393,6 +400,8 @@ class VirtualMachine extends EventEmitter {
 		if(this.rtc) this.rtc.cycle(this);
 		if(this.mailbox) this.mailbox.cycle(this);
 		if(this.uart) this.uart.cycle(this);
+		
+		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR && this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ && this.cpu.irqs.length > 0) this.intr(this.cpu.irqs.shift());
 		
 		this.emit("cpu/cycle");
 		
