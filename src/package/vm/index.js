@@ -48,11 +48,11 @@ class VirtualMachine extends EventEmitter {
 			ivt: new Float64Array(6),
 			intr: new Float64Array(1),
 			running: false,
-			clockspeed: 1,
+			clockspeed: opts.clockspeed || 1,
 			irqs: []
 		};
 		this.ioctl = {
-			ram: new Float64Array(IO_RAM_SIZE),
+			ram: new Float64Array(opts.ramSize || IO_RAM_SIZE),
 			mmap: []
 		};
 		this.opts = opts;
@@ -70,7 +70,7 @@ class VirtualMachine extends EventEmitter {
 	reset() {
 		/* (Re)initialize the RAM */
 		if(this.ioctl.ram) delete this.ioctl.ram;
-		this.ioctl.ram = new Float64Array(IO_RAM_SIZE);
+		this.ioctl.ram = new Float64Array(this.opts.ramSize || IO_RAM_SIZE);
 		
 		/* (Re)initialize the memory map in the IO Controller */
 		if(this.ioctl.mmap) delete this.ioctl.mmap;
@@ -95,6 +95,7 @@ class VirtualMachine extends EventEmitter {
 		this.cpu.ivt.fill(0);
 		this.cpu.intr[0] = 0;
 		this.cpu.running = false;
+		this.cpu.regs.pc[0] = IO_RAM_BASE;
 		
 		this.emit("reset");
 	}
@@ -467,6 +468,12 @@ class VirtualMachine extends EventEmitter {
 			write: write
 		})-1;
 		this.emit("ioctl/mmap",addr,end,i);
+	}
+	isMapped(addr) {
+		for(var entry of this.ioctl.mmap) {
+			if(entry.addr <= addr && entry.end > addr) return true;
+		}
+		return false;
 	}
 	read(addr) {
 		this.emit("ioctl/read",addr);
