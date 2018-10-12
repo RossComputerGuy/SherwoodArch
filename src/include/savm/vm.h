@@ -27,7 +27,7 @@
 #endif
 
 #ifndef SAVM_CPU_IVT_SIZE
-#define SAVM_CPU_IVT_SIZE 7
+#define SAVM_CPU_IVT_SIZE 8
 #endif
 
 /* CPU -> IVT */
@@ -58,6 +58,10 @@
 
 #ifndef SAVM_CPU_INT_MAILBOX
 #define SAVM_CPU_INT_MAILBOX 6
+#endif
+
+#ifndef SAVM_CPU_INT_SYSCALL
+#define SAVM_CPU_INT_SYSCALL 7
 #endif
 
 /* IO CTRL -> Mailbox */

@@ -15,7 +15,8 @@ const CPU_INT = {
 	"DIVBYZERO": 3,
 	"BADINSTR": 4,
 	"TIMER": 5,
-	"MAILBOX": 6
+	"MAILBOX": 6,
+	"SYSCALL": 7
 };
 
 const IO_RAM_BASE = 0xA0000000;
