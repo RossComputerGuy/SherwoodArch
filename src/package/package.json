@@ -9,11 +9,11 @@
   "author": "Spaceboy Ross",
   "license": "Apache-2.0",
   "dependencies": {
+    "c-tokenizer": "^1.0.0",
     "chevrotain": "^4.1.0",
     "commander": "^2.19.0",
     "jints": "^1.0.5",
-    "struct-fu": "^1.2.1",
-    "tokenize": "0.0.3"
+    "struct-fu": "^1.2.1"
   },
   "devDependencies": {
     "browserify": "^16.2.3"

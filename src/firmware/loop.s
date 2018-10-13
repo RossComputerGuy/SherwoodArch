@@ -1,2 +1,2 @@
 main:
-	jmp @main
+	jmp main

@@ -13,4 +13,4 @@ main:
 	sto $0x10000013,'d'
 	sto $0x10000013,'\r'
 	sto $0x10000013,'\n'
-	jmp @main
+	jmp main
