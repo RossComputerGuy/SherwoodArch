@@ -19,6 +19,10 @@ const CPU_INT = {
 	"SYSCALL": 7
 };
 
+const IO_IOCTL_BASE = 0x10000016;
+const IO_IOCTL_SIZE = 0x00000001;
+const IO_IOCTL_END = IO_IOCTL_BASE+IO_IOCTL_SIZE;
+
 const IO_RAM_BASE = 0xA0000000;
 const IO_RAM_SIZE = 0x40000000;
 const IO_RAM_END = IO_RAM_BASE+IO_RAM_SIZE;
@@ -76,6 +80,11 @@ class VirtualMachine extends EventEmitter {
 		/* (Re)initialize the memory map in the IO Controller */
 		if(this.ioctl.mmap) delete this.ioctl.mmap;
 		this.ioctl.mmap = [];
+		this.mmap(IO_IOCTL_BASE,IO_IOCTL_END,i => {
+			switch(i) {
+				case 0: return this.ioctl.ram.length;
+			}
+		},(i,v) => {});
 		this.mmap(IO_RAM_BASE,IO_RAM_END,i => this.ioctl.ram[i],(i,v) => { this.ioctl.ram[i] = v; });
 		
 		/* Reset the mailbox */

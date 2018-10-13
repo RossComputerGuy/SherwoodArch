@@ -3,6 +3,9 @@
 #include <sys/stat.h>
 #include <string.h>
 
+uint64_t savm_ioctl_ioctl_read(savm_t* vm,uint64_t i);
+void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data);
+
 uint64_t savm_ioctl_ram_read(savm_t* vm,uint64_t i);
 void savm_ioctl_ram_write(savm_t* vm,uint64_t i,uint64_t data);
 
@@ -45,6 +48,9 @@ savm_error_e savm_reset(savm_t* vm) {
 	/* (Re)initialize the memory map in the IO Controller */
 	if(vm->io.mmap != NULL) free(vm->io.mmap);
 	savm_error_e err = savm_ioctl_mmap(vm,SAVM_IO_RAM_BASE,SAVM_IO_RAM_END,savm_ioctl_ram_read,savm_ioctl_ram_write);
+	if(err != SAVM_ERROR_NONE) return err;
+	
+	err = savm_ioctl_mmap(vm,SAVM_IO_IOCTL_BASE,SAVM_IO_IOCTL_END,savm_ioctl_ioctl_read,savm_ioctl_ioctl_write);
 	if(err != SAVM_ERROR_NONE) return err;
 	
 	/* Reset the mailbox */
@@ -1365,6 +1371,15 @@ savm_error_e savm_ioctl_write(savm_t* vm,uint64_t addr,uint64_t data) {
 	}
 	return SAVM_ERROR_NOTMAPPED;
 }
+
+uint64_t savm_ioctl_ioctl_read(savm_t* vm,uint64_t i) {
+	switch(i) {
+		case 0: return SAVM_IO_RAM_SIZE;
+	}
+	return 0;
+}
+
+void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data) {}
 
 uint64_t savm_ioctl_ram_read(savm_t* vm,uint64_t i) {
 	return vm->io.ram[i];
