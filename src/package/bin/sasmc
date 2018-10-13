@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const compile = require("../assembler");
+const Assembler = require("../assembler");
 const fs = require("fs");
 const program = require("commander")
 	.version("1.0.0")
@@ -10,9 +10,14 @@ const program = require("commander")
 	.parse(process.argv);
 
 var programs = [];
+var asm = new Assembler();
 for(var i = 0;i < program.args.length;i++) {
 	if(program.verbose) console.log("Compiling "+program.args[i]);
-	programs[i] = compile(fs.readFileSync(program.args[i]).toString(),{ verbose: program.verbose });
+	programs[i] = asm.compileFile(program.args[i]).instrs;
+	for(var err of asm.errors) {
+		console.error(err);
+	}
+	if(asm.errors.length > 0) process.exit(1);
 }
 var totalProgramSize = 0;
 for(var i = 0;i < programs.length;i++) totalProgramSize += programs[i].length;
