@@ -1,1 +1,2 @@
-jmp $0xA0000000
+main:
+	jmp @main

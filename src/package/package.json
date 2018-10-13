@@ -9,9 +9,11 @@
   "author": "Spaceboy Ross",
   "license": "Apache-2.0",
   "dependencies": {
+    "chevrotain": "^4.1.0",
     "commander": "^2.19.0",
     "jints": "^1.0.5",
-    "struct-fu": "^1.2.1"
+    "struct-fu": "^1.2.1",
+    "tokenize": "0.0.3"
   },
   "devDependencies": {
     "browserify": "^16.2.3"
