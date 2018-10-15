@@ -1,16 +1,18 @@
 BIN=./bin
 SRC=./src
 
+IDE_BIN=$(BIN)/ide
 VM_BIN=$(BIN)/vm
 
 BUILD_SRC=$(SRC)/build
+IDE_SRC=$(SRC)/ide
 INCLUDE_SRC=$(SRC)/include
 SAJS_SRC=$(SRC)/package
 VM_SRC=$(SRC)/vm
 
-all: vm sajs
+all: vm sajs ide
 
 clean:
-	@rm -rf $(BIN) $(SAJS_SRC)/dist $(SAJS_SRC)/node_modules $(SAJS_SRC)/package-lock.json
+	@rm -rf $(BIN) $(IDE_SRC)/dist $(SAJS_SRC)/dist $(IDE_SRC)/node_modules $(SAJS_SRC)/node_modules $(IDE_SRC)/package-lock.json $(SAJS_SRC)/package-lock.json $(IDE_SRC)/libs/sa.js
 
 include $(BUILD_SRC)/Makefile

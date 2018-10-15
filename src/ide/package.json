@@ -1,0 +1,27 @@
+{
+  "name": "saide",
+  "version": "1.0.0",
+  "description": "The official IDE for the Sherwood Architecture",
+  "main": "index.js",
+  "scripts": {
+    "test": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "author": "Spaceboy Ross",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "electron": "^3.0.4",
+    "electron-builder": "^20.28.4"
+  },
+  "build": {
+    "appId": "com.rosssoftware.SAIDE",
+    "productName": "SAIDE",
+    "mac": {
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "category": "Development"
+    }
+  }
+}
