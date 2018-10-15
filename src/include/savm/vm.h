@@ -20,6 +20,18 @@
 #define SAVM_CPU_REG_FLAG_ENIRQ (1 << 1)
 #endif
 
+#ifndef SAVM_CPU_REG_FLAG_PAGING
+#define SAVM_CPU_REG_FLAG_PAGING (1 << 2)
+#endif
+
+#ifndef SAVM_CPU_REG_FLAG_PRIV_KERN
+#define SAVM_CPU_REG_FLAG_PRIV_KERN (1 << 3)
+#endif
+
+#ifndef SAVM_CPU_REG_FLAG_PRIV_USER
+#define SAVM_CPU_REG_FLAG_PRIV_USER (1 << 4)
+#endif
+
 /* CPU -> sizes */
 
 #ifndef SAVM_CPU_STACK_SIZE
@@ -27,7 +39,7 @@
 #endif
 
 #ifndef SAVM_CPU_IVT_SIZE
-#define SAVM_CPU_IVT_SIZE 8
+#define SAVM_CPU_IVT_SIZE 9
 #endif
 
 /* CPU -> IVT */
@@ -52,16 +64,46 @@
 #define SAVM_CPU_INT_BADINSTR 4
 #endif
 
+#ifndef SAVM_CPU_INT_BADPERM
+#define SAVM_CPU_INT_BADPERM 5
+#endif
+
 #ifndef SAVM_CPU_INT_TIMER
-#define SAVM_CPU_INT_TIMER 5
+#define SAVM_CPU_INT_TIMER 6
 #endif
 
 #ifndef SAVM_CPU_INT_MAILBOX
-#define SAVM_CPU_INT_MAILBOX 6
+#define SAVM_CPU_INT_MAILBOX 7
 #endif
 
 #ifndef SAVM_CPU_INT_SYSCALL
-#define SAVM_CPU_INT_SYSCALL 7
+#define SAVM_CPU_INT_SYSCALL 8
+#endif
+
+/* CPU -> Paging */
+
+#ifndef SAVM_CPU_PAGING_FLAG_PRESENT
+#define SAVM_CPU_PAGING_FLAG_PRESENT (1 << 0)
+#endif
+
+#ifndef SAVM_CPU_PAGING_FLAG_ACCESSED
+#define SAVM_CPU_PAGING_FLAG_ACCESSED (1 << 1)
+#endif
+
+#ifndef SAVM_CPU_PAGING_FLAG_DIRTY
+#define SAVM_CPU_PAGING_FLAG_DIRTY (1 << 2)
+#endif
+
+#ifndef SAVM_CPU_PAGING_PERM_KERN
+#define SAVM_CPU_PAGING_PERM_KERN (1 << 0)
+#endif
+
+#ifndef SAVM_CPU_PAGING_PERM_USER
+#define SAVM_CPU_PAGING_PERM_USER (1 << 1)
+#endif
+
+#ifndef SAVM_CPU_PAGING_PERM_ALL
+#define SAVM_CPU_PAGING_PERM_ALL (SAVM_CPU_PAGING_PERM_KERN | SAVM_CPU_PAGING_PERM_USER)
 #endif
 
 /* IO CTRL -> Mailbox */
@@ -113,7 +155,7 @@
 #endif
 
 #ifndef SAVM_IO_IOCTL_SIZE
-#define SAVM_IO_IOCTL_SIZE 0x00000001
+#define SAVM_IO_IOCTL_SIZE 0x00000002
 #endif
 
 #ifndef SAVM_IO_IOCTL_END
@@ -160,6 +202,23 @@ typedef struct {
 	uint64_t ptr[10]; /* Pointers */
 } savm_cpu_regs_t;
 
+typedef struct {
+	uint32_t flags; /* Page flags */
+	uint32_t perms; /* Page permissions */
+	uint64_t size; /* Page size */
+	uint64_t address; /* Page address */
+} savm_page_t;
+
+typedef struct {
+	uint64_t size;
+	savm_page_t* page; /* Table entries */
+} savm_pagetbl_t;
+
+typedef struct {
+	uint64_t tableCount;
+	savm_pagetbl_t* tables;
+} savm_pagedir_t;
+
 typedef struct savm {
 	struct {
 		savm_cpu_regs_t regs;
@@ -180,6 +239,8 @@ typedef struct savm {
 		
 		size_t mmapSize;
 		savm_io_mmap_entry_t* mmap;
+		
+		savm_pagedir_t* pgdir;
 	} io;
 	
 	savm_mailbox_t mailbox;

@@ -28,6 +28,7 @@ savm_error_e savm_destroy(savm_t* vm) {
 	if(vm->cpu.irqs != NULL) free(vm->cpu.irqs);
 	if(vm->io.ram != NULL) free(vm->io.ram);
 	if(vm->io.mmap != NULL) free(vm->io.mmap);
+	if(vm->io.pgdir != NULL) free(vm->io.pgdir);
 	
 	savm_error_e err = savm_mailbox_destroy(&vm->mailbox);
 	if(err != SAVM_ERROR_NONE) return err;
@@ -44,6 +45,9 @@ savm_error_e savm_reset(savm_t* vm) {
 	vm->io.ram = malloc(SAVM_IO_RAM_SIZE);
 	if(vm->io.ram == NULL) return SAVM_ERROR_MEM;
 	memset(vm->io.ram,0,SAVM_IO_RAM_SIZE);
+	
+	/* (Re)initialize the paging */
+	if(vm->io.pgdir != NULL) free(vm->io.pgdir);
 	
 	/* (Re)initialize the memory map in the IO Controller */
 	if(vm->io.mmap != NULL) free(vm->io.mmap);
@@ -66,6 +70,7 @@ savm_error_e savm_reset(savm_t* vm) {
 	if(err != SAVM_ERROR_NONE) return err;
 	
 	/* Reset the registers */
+	vm->cpu.regs.flags = SAVM_CPU_REG_FLAG_ENIRQ | SAVM_CPU_REG_FLAG_PRIV_KERN;
 	vm->cpu.regs.pc = SAVM_IO_RAM_BASE;
 	vm->cpu.regs.cycle = 0;
 	
@@ -82,7 +87,7 @@ savm_error_e savm_reset(savm_t* vm) {
 /* CPU */
 savm_error_e savm_cpu_intr(savm_t* vm,uint64_t intr) {
 	if(intr > SAVM_CPU_IVT_SIZE) return SAVM_ERROR_INVAL_INT;
-	if(intr > 4 && vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_ENIRQ && vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR) {
+	if(intr > SAVM_CPU_INT_BADPERM && vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_ENIRQ && vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR) {
 		size_t i = -1;
 		if(vm->cpu.irqs == NULL || vm->cpu.irqSize < 1) {
 			i = 0;
@@ -107,9 +112,10 @@ savm_error_e savm_cpu_intr(savm_t* vm,uint64_t intr) {
 		vm->cpu.intr = SAVM_CPU_INT_FAULT;
 		return SAVM_ERROR_NONE;
 	}
-	if(intr > 4 && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_ENIRQ)) return SAVM_ERROR_NONE;
+	if(intr > SAVM_CPU_INT_BADPERM && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_ENIRQ)) return SAVM_ERROR_NONE;
 	memcpy(&vm->cpu.iregs,&vm->cpu.regs,sizeof(savm_cpu_regs_t));
-	vm->cpu.regs.flags |= SAVM_CPU_REG_FLAG_INTR;
+	vm->cpu.regs.flags |= SAVM_CPU_REG_FLAG_INTR & SAVM_CPU_REG_FLAG_PRIV_KERN;
+	vm->cpu.regs.flags &= ~SAVM_CPU_REG_FLAG_PRIV_USER;
 	vm->cpu.intr = intr;
 	vm->cpu.regs.pc = vm->cpu.ivt[intr];
 	return SAVM_ERROR_NONE;
@@ -156,6 +162,16 @@ savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val) {
 	switch(i) {
 		case 0: /* flags */
 			if(val & SAVM_CPU_REG_FLAG_INTR && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR)) val &= ~SAVM_CPU_REG_FLAG_INTR;
+			if(val & SAVM_CPU_REG_FLAG_PAGING && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PAGING)) val &= ~SAVM_CPU_REG_FLAG_PAGING;
+			if(val & SAVM_CPU_REG_FLAG_PRIV_KERN && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN)) val &= ~SAVM_CPU_REG_FLAG_PRIV_KERN;
+			if(val & SAVM_CPU_REG_FLAG_PRIV_USER && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_USER)) val &= ~SAVM_CPU_REG_FLAG_PRIV_USER;
+			
+			if(!(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PAGING) && val & SAVM_CPU_REG_FLAG_PAGING) {
+				if(vm->io.pgdir == NULL) {
+					savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_FAULT);
+					if(err != SAVM_ERROR_NONE) return err;
+				}
+			}
 			vm->cpu.regs.flags = val;
 			break;
 		case 1: /* tmp */
@@ -1158,98 +1174,133 @@ savm_error_e savm_cpu_cycle(savm_t* vm) {
 			}
 			break;
 		case 45: /* INTR */
-			err = savm_cpu_regread(vm,addr,&val);
-			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
-			if(err == SAVM_ERROR_INVAL_ADDR) {
-				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-				if(err != SAVM_ERROR_NONE) return err;
-				break;
-			}
-			err = savm_cpu_intr(vm,val);
-			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_INT) return err;
-			if(err == SAVM_ERROR_INVAL_INT) {
-				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
+				err = savm_cpu_regread(vm,addr,&val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+				err = savm_cpu_intr(vm,val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_INT) return err;
+				if(err == SAVM_ERROR_INVAL_INT) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+				}
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 				if(err != SAVM_ERROR_NONE) return err;
 			}
 			break;
 		case 46: /* INTM */
-			err = savm_ioctl_read(vm,addr,&val);
-			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-			if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
-				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-				if(err != SAVM_ERROR_NONE) return err;
-				break;
-			}
-			err = savm_cpu_intr(vm,val);
-			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_INT) return err;
-			if(err == SAVM_ERROR_INVAL_INT) {
-				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
+				err = savm_ioctl_read(vm,addr,&val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+					break;
+				}
+				err = savm_cpu_intr(vm,val);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_INT) return err;
+				if(err == SAVM_ERROR_INVAL_INT) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+				}
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 				if(err != SAVM_ERROR_NONE) return err;
 			}
 			break;
 		case 47: /* INT */
-			err = savm_cpu_intr(vm,addr);
-			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_INT) return err;
-			if(err == SAVM_ERROR_INVAL_INT) {
-				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
+				err = savm_cpu_intr(vm,addr);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_INT) return err;
+				if(err == SAVM_ERROR_INVAL_INT) {
+					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+					if(err != SAVM_ERROR_NONE) return err;
+				}
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 				if(err != SAVM_ERROR_NONE) return err;
 			}
 			break;
 		case 48: /* IRET */
-			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR) {
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR || vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
 				memcpy(&vm->cpu.regs,&vm->cpu.iregs,sizeof(savm_cpu_regs_t));
 			} else {
 				err = savm_cpu_intr(vm,SAVM_CPU_INT_FAULT);
 				if(err != SAVM_ERROR_NONE) return err;
 			}
 		case 49: /* LDITBLR */
-			err = savm_cpu_regread(vm,addr,&addr);
-			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
-			if(err == SAVM_ERROR_INVAL_ADDR) {
-				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-				if(err != SAVM_ERROR_NONE) return err;
-				break;
-			}
-			
-			for(uint64_t i = 0;i < SAVM_CPU_IVT_SIZE;i++) {
-				err = savm_ioctl_read(vm,addr+i,&vm->cpu.ivt[i]);
-				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
+				err = savm_cpu_regread(vm,addr,&addr);
+				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
+				if(err == SAVM_ERROR_INVAL_ADDR) {
 					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
+				
+				for(uint64_t i = 0;i < SAVM_CPU_IVT_SIZE;i++) {
+					err = savm_ioctl_read(vm,addr+i,&vm->cpu.ivt[i]);
+					if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+					if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
+						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+						if(err != SAVM_ERROR_NONE) return err;
+						break;
+					}
+				}
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) return err;
 			}
 			break;
 		case 50: /* LDITBLM */
-			err = savm_ioctl_read(vm,addr,&addr);
-			if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-			if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
-				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
-				if(err != SAVM_ERROR_NONE) return err;
-				break;
-			}
-			
-			for(uint64_t i = 0;i < SAVM_CPU_IVT_SIZE;i++) {
-				err = savm_ioctl_read(vm,addr+i,&vm->cpu.ivt[i]);
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
+				err = savm_ioctl_read(vm,addr,&addr);
 				if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
-				if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
+					if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
 					err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 					if(err != SAVM_ERROR_NONE) return err;
 					break;
 				}
+				
+				for(uint64_t i = 0;i < SAVM_CPU_IVT_SIZE;i++) {
+					err = savm_ioctl_read(vm,addr+i,&vm->cpu.ivt[i]);
+					if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+					if(err == SAVM_ERROR_INVAL_ADDR || err == SAVM_ERROR_NOTMAPPED) {
+						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+						if(err != SAVM_ERROR_NONE) return err;
+						break;
+					}
+				}
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) return err;
 			}
 			break;
 		case 51: /* HLT */
-			vm->cpu.running = 0;
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
+				vm->cpu.running = 0;
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) return err;
+			}
 			break;
 		case 52: /* RST */
-			err = savm_reset(vm);
-			if(err != SAVM_ERROR_NONE) return err;
-			vm->cpu.running = 1;
-			vm->cpu.regs.cycle = -1;
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN) {
+				err = savm_reset(vm);
+				if(err != SAVM_ERROR_NONE) return err;
+				vm->cpu.running = 1;
+				vm->cpu.regs.cycle = -1;
+			} else {
+				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) return err;
+			}
 		default:
-			err = savm_cpu_intr(vm,val);
+			err = savm_cpu_intr(vm,SAVM_CPU_INT_BADINSTR);
 			if(err != SAVM_CPU_INT_BADINSTR) return err;
 			break;
 	}
@@ -1352,6 +1403,22 @@ savm_error_e savm_ioctl_mmap(savm_t* vm,uint64_t addr,uint64_t end,savm_ioctl_re
 
 savm_error_e savm_ioctl_read(savm_t* vm,uint64_t addr,uint64_t* data) {
 	if(vm->io.mmap == NULL) return SAVM_ERROR_NOTMAPPED;
+	if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PAGING) {
+		for(uint64_t t = 0;t < vm->io.pgdir->tableCount;t++) {
+			for(uint64_t p = 0;p < vm->io.pgdir->tables[t].size;p++) {
+				if(vm->io.pgdir->tables[t].page[p].address <= addr && vm->io.pgdir->tables[t].page[p].address+vm->io.pgdir->tables[t].page[p].size > addr) {
+					if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN && !(vm->io.pgdir->tables[t].page[p].perms & SAVM_CPU_PAGING_PERM_KERN)) {
+						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+						if(err != SAVM_ERROR_NONE) return err;
+					}
+					if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_USER && !(vm->io.pgdir->tables[t].page[p].perms & SAVM_CPU_PAGING_PERM_USER)) {
+						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+						if(err != SAVM_ERROR_NONE) return err;
+					}
+				}
+			}
+		}
+	}
 	for(size_t i = 0;i < vm->io.mmapSize;i++) {
 		if(vm->io.mmap[i].addr <= addr && vm->io.mmap[i].end > addr) {
 			*data = vm->io.mmap[i].read(vm,addr-vm->io.mmap[i].addr);
@@ -1363,8 +1430,24 @@ savm_error_e savm_ioctl_read(savm_t* vm,uint64_t addr,uint64_t* data) {
 
 savm_error_e savm_ioctl_write(savm_t* vm,uint64_t addr,uint64_t data) {
 	if(vm->io.mmap == NULL) return SAVM_ERROR_NOTMAPPED;
+	if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PAGING) {
+		for(uint64_t t = 0;t < vm->io.pgdir->tableCount;t++) {
+			for(uint64_t p = 0;p < vm->io.pgdir->tables[t].size;p++) {
+				if(vm->io.pgdir->tables[t].page[p].address <= addr && vm->io.pgdir->tables[t].page[p].address+vm->io.pgdir->tables[t].page[p].size > addr) {
+					if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN && !(vm->io.pgdir->tables[t].page[p].perms & SAVM_CPU_PAGING_PERM_KERN)) {
+						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+						if(err != SAVM_ERROR_NONE) return err;
+					}
+					if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_USER && !(vm->io.pgdir->tables[t].page[p].perms & SAVM_CPU_PAGING_PERM_USER)) {
+						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+						if(err != SAVM_ERROR_NONE) return err;
+					}
+				}
+			}
+		}
+	}
 	for(size_t i = 0;i < vm->io.mmapSize;i++) {
-		if(vm->io.mmap[i].addr <= addr && vm->io.mmap[i].end > addr) {\
+		if(vm->io.mmap[i].addr <= addr && vm->io.mmap[i].end > addr) {
 			vm->io.mmap[i].write(vm,addr-vm->io.mmap[i].addr,data);
 			return SAVM_ERROR_NONE;
 		}
@@ -1379,7 +1462,38 @@ uint64_t savm_ioctl_ioctl_read(savm_t* vm,uint64_t i) {
 	return 0;
 }
 
-void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data) {}
+void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data) {
+	switch(i) {
+		case 1:
+			if(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_PRIV_USER) {
+				savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) {
+					vm->cpu.running = 0;
+					return;
+				}
+			}
+			vm->io.pgdir = malloc(sizeof(savm_pagedir_t));
+			savm_ioctl_read(vm,data,&vm->io.pgdir->tableCount);
+			vm->io.pgdir->tables = malloc(sizeof(savm_pagetbl_t)*vm->io.pgdir->tableCount);
+			for(uint64_t i = 0;i < vm->io.pgdir->tableCount;i++) {
+				savm_ioctl_read(vm,data,&vm->io.pgdir->tables[i].size);
+				vm->io.pgdir->tables[i].page = malloc(sizeof(savm_page_t)*vm->io.pgdir->tables[i].size);
+				for(uint64_t x = 0;x < vm->io.pgdir->tables[i].size;x++) {
+					uint64_t tmp;
+					savm_ioctl_read(vm,data,&tmp);
+					vm->io.pgdir->tables[i].page[x].flags = tmp & 0xffffffff;
+					vm->io.pgdir->tables[i].page[x].perms = tmp >> 32;
+					
+					savm_ioctl_read(vm,data+1,&vm->io.pgdir->tables[i].page[x].size);
+					savm_ioctl_read(vm,data+2,&vm->io.pgdir->tables[i].page[x].address);
+					
+					data += 3;
+				}
+				data += 1;
+			}
+			break;
+	}
+}
 
 uint64_t savm_ioctl_ram_read(savm_t* vm,uint64_t i) {
 	return vm->io.ram[i];

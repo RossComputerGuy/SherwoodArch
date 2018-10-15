@@ -7,6 +7,12 @@ const UART = require("./hardware/uart");
 
 const CPU_REG_FLAG_INTR = (1 << 0);
 const CPU_REG_FLAG_ENIRQ = (1 << 1);
+const CPU_REG_FLAG_PAGING = (1 << 2);
+const CPU_REG_FLAG_PRIV_KERN = (1 << 3);
+const CPU_REG_FLAG_PRIV_USER = (1 << 4);
+
+const CPU_PAGING_PERM_KERN = (1 << 0);
+const CPU_PAGING_PERM_USER = (1 << 1);
 
 const CPU_INT = {
 	"STACK_OVERFLOW": 0,
@@ -14,13 +20,14 @@ const CPU_INT = {
 	"BADADDR": 2,
 	"DIVBYZERO": 3,
 	"BADINSTR": 4,
-	"TIMER": 5,
-	"MAILBOX": 6,
-	"SYSCALL": 7
+	"BADPERM": 5,
+	"TIMER": 6,
+	"MAILBOX": 7,
+	"SYSCALL": 8
 };
 
 const IO_IOCTL_BASE = 0x10000016;
-const IO_IOCTL_SIZE = 0x00000001;
+const IO_IOCTL_SIZE = 0x00000002;
 const IO_IOCTL_END = IO_IOCTL_BASE+IO_IOCTL_SIZE;
 
 const IO_RAM_BASE = 0xA0000000;
@@ -58,7 +65,8 @@ class VirtualMachine extends EventEmitter {
 		};
 		this.ioctl = {
 			ram: new Float64Array(opts.ramSize || IO_RAM_SIZE),
-			mmap: []
+			mmap: [],
+			pgdir: null
 		};
 		this.opts = opts;
 		
@@ -84,8 +92,33 @@ class VirtualMachine extends EventEmitter {
 			switch(i) {
 				case 0: return this.ioctl.ram.length;
 			}
-		},(i,v) => {});
+		},(i,v) => {
+			switch(i) {
+				case 1:
+					if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER) return this.intr(CPU_INT["BADPERM"]);
+					this.ioctl.pgdir = {};
+					this.ioctl.pgdir.tables = new Array(this.read(addr));
+					for(var i = 0;i < this.ioctl.pgdir.tables.length;i++) {
+						this.ioctl.pgdir.tables[i] = {};
+						this.ioctl.pgdir.tables[i].page = new Array(this.read(addr));
+						for(var x = 0;x < this.ioctl.pgdir.tables[i].page.length;x++) {
+							var tmp = this.read(addr);
+							
+							this.ioctl.pgdir.tables[i].page[x] = {};
+							this.ioctl.pgdir.tables[i].page[x].flags = tmp & 0xffffffff;
+							this.ioctl.pgdir.tables[i].page[x].perms = tmp >> 32;
+							this.ioctl.pgdir.tables[i].page[x].size = this.read(addr+1);
+							this.ioctl.pgdir.tables[i].page[x].address = this.read(addr+2);
+							
+							addr += 3;
+						}
+						data += 1;
+					}
+					break;
+			}
+		});
 		this.mmap(IO_RAM_BASE,IO_RAM_END,i => this.ioctl.ram[i],(i,v) => { this.ioctl.ram[i] = v; });
+		if(this.ioctl.pgdir) delete this.ioctl.pgdir;
 		
 		/* Reset the mailbox */
 		if(this.mailbox) this.mailbox.reset(this);
@@ -112,14 +145,15 @@ class VirtualMachine extends EventEmitter {
 	
 	intr(i) {
 		if(i > this.cpu.ivt.length) throw new Error("SAVM_ERROR_INVAL_INT");
-		if(i > 4 && this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ) return this.cpu.irqs.push(i);
+		if(i > 5 && this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ) return this.cpu.irqs.push(i);
 		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) {
 			this.cpu.intr[0] = CPU_INT["FAULT"];
 			return this.emit("cpu/interrupt",i);
 		}
-		if(i > 4 && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ)) return;
+		if(i > 5 && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ)) return;
 		this.cpu.iregs = this.cpu.regs;
-		this.cpu.regs.flags[0] |= CPU_REG_FLAG_INTR;
+		this.cpu.regs.flags[0] |= CPU_REG_FLAG_INTR & CPU_REG_FLAG_PRIV_KERN;
+		this.cpu.regs.flags[0] &= ~CPU_REG_FLAG_PRIV_USER;
 		this.cpu.intr[0] = i;
 		this.cpu.regs.pc[0] = this.cpu.ivt[i];
 		
@@ -146,6 +180,13 @@ class VirtualMachine extends EventEmitter {
 		switch(i) {
 			case 0: /* flags */
 				if(val & CPU_REG_FLAG_INTR && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR)) val &= ~CPU_REG_FLAG_INTR;
+				if(val & CPU_REG_FLAG_PAGING && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_PAGING)) val &= ~SAVM_CPU_REG_FLAG_PAGING;
+				if(val & CPU_REG_FLAG_PRIV_KERN && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_KERN)) val &= ~SAVM_CPU_REG_FLAG_PRIV_KERN;
+				if(val & CPU_REG_FLAG_PRIV_USER && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) val &= ~CPU_REG_FLAG_PRIV_USER;
+				
+				if(!(this.cpu.regs.flags[0] & SAVM_CPU_REG_FLAG_PAGING) && val & SAVM_CPU_REG_FLAG_PAGING) {
+					if(this.ioctl.pgdir == null) return this.intr(CPU_INT["FAULT"]);
+				}
 				this.cpu.regs.flags[0] = v;
 				break;
 			case 1: /* tmp */
@@ -357,48 +398,63 @@ class VirtualMachine extends EventEmitter {
 					this.write(addr,val);
 					break;
 				case 45: /* INTR */
-					var a = this.regread(addr);
-					try {
-						this.intr(a);
-					} catch(ex) {
-						this.intr(CPU_INT["BADADDR"]);
-					}
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						var a = this.regread(addr);
+						try {
+							this.intr(a);
+						} catch(ex) {
+							this.intr(CPU_INT["BADADDR"]);
+						}
+					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 46: /* INTM */
-					var a = this.read(addr);
-					try {
-						this.intr(a);
-					} catch(ex) {
-						this.intr(CPU_INT["BADADDR"]);
-					}
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						var a = this.read(addr);
+						try {
+							this.intr(a);
+						} catch(ex) {
+							this.intr(CPU_INT["BADADDR"]);
+						}
+					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 47: /* INT */
-					try {
-						this.intr(addr);
-					} catch(ex) {
-						this.intr(CPU_INT["BADADDR"]);
-					}
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						try {
+							this.intr(addr);
+						} catch(ex) {
+							this.intr(CPU_INT["BADADDR"]);
+						}
+					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 48: /* IRET */
-					if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.regs = this.cpu.iregs;
-					else this.intr(CPU_INT["FAULT"]);
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.regs = this.cpu.iregs;
+						else this.intr(CPU_INT["FAULT"]);
+					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 49: /* LDITBLR */
-					addr = this.regread(addr);
-					for(var i = 0;i < this.cpu.ivt.length;i++) this.cpu.ivt[i] = this.read(addr+i);
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						addr = this.regread(addr);
+						for(var i = 0;i < this.cpu.ivt.length;i++) this.cpu.ivt[i] = this.read(addr+i);
+					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 50: /* LDITBLM */
-					addr = this.read(addr);
-					for(var i = 0;i < this.cpu.ivt.length;i++) this.cpu.ivt[i] = this.read(addr+i);
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						addr = this.read(addr);
+						for(var i = 0;i < this.cpu.ivt.length;i++) this.cpu.ivt[i] = this.read(addr+i);
+					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 51: /* HLT */
-					this.stop();
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) this.stop();
+					else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 52: /* RST */
-					this.stop();
-					this.reset();
-					this.start();
-					this.cpu.regs.cycle[0] = -1;
+					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						this.stop();
+						this.reset();
+						this.start();
+						this.cpu.regs.cycle[0] = -1;
+					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				default:
 					this.intr(CPU_INT["BADINSTR"]);
@@ -487,12 +543,32 @@ class VirtualMachine extends EventEmitter {
 	}
 	read(addr) {
 		this.emit("ioctl/read",addr);
+		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PAGING) {
+			for(var table of this.ioctl.pgdir.tables) {
+				for(var pg of table.entries) {
+					if(pg.address <= addr && pg.address+pg.size > addr) {
+						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
+						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
+					}
+				}
+			}
+		}
 		for(var entry of this.ioctl.mmap) {
 			if(entry.addr <= addr && entry.end > addr) return entry.read(addr-entry.addr);
 		}
 		throw new Error("SAVM_ERROR_NOTMAPPED");
 	}
 	write(addr,v) {
+		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PAGING) {
+			for(var table of this.ioctl.pgdir.tables) {
+				for(var pg of table.entries) {
+					if(pg.address <= addr && pg.address+pg.size > addr) {
+						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
+						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
+					}
+				}
+			}
+		}
 		for(var entry of this.ioctl.mmap) {
 			if(entry.addr <= addr && entry.end > addr) {
 				entry.write(addr-entry.addr,v);
