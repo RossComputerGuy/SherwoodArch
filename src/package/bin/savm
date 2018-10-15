@@ -5,13 +5,16 @@ const fs = require("fs");
 const program = require("commander")
 	.version("1.0.0")
 	.usage("[options] <file ...>")
-	.option("-f, --firmware <file>","Loads firmware from a file")
-	.option("-r, --ram <file>","Load and save RAM to/from file (Start vector is overrided by firmware)")
 	.option("-c, --clockspeed <number>","Sets the CPU's clockspeed",1)
+	.option("-f, --firmware <file>","Loads firmware from a file")
+	.option("-m, --memory <number>","Sets the system physical RAM size",0x40000000)
+	.option("-r, --ram <file>","Load and save RAM to/from file (Start vector is overrided by firmware)")
 	.parse(process.argv);
 
-var vm = new VirtualMachine();
-vm.cpu.clockspeed = program.clockspeed;
+var vm = new VirtualMachine({
+	clockspeed: program.clockspeed,
+	ramSize: program.memory
+});
 vm.reset();
 process.stdin.setRawMode(true);
 process.stdin.resume();
