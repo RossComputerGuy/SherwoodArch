@@ -349,6 +349,7 @@ class Parser {
 					i += t.tokens.length-1;
 					tokens.push(t);
 				}
+				if(this.findFunction(token.image.replace(":","")) != null) throw new Error("Function already exists");
 				return new TokenFunction(token,tokens);
 			}
 		} catch(ex) {
