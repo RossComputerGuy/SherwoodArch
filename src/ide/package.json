@@ -1,27 +1,90 @@
 {
   "name": "saide",
+  "productName": "saide",
   "version": "1.0.0",
-  "description": "The official IDE for the Sherwood Architecture",
-  "main": "index.js",
+  "description": "Sherwood Architecture IDE",
+  "main": "src/index.js",
   "scripts": {
-    "test": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint src --color"
   },
-  "author": "Spaceboy Ross",
+  "keywords": [],
+  "author": {
+    "name": "Spaceboy Ross",
+    "email": "spaceboyross@yandex.com"
+  },
   "license": "Apache-2.0",
-  "devDependencies": {
-    "electron": "^3.0.4",
-    "electron-builder": "^20.28.4"
-  },
-  "build": {
-    "appId": "com.rosssoftware.SAIDE",
-    "productName": "SAIDE",
-    "mac": {
-      "category": "public.app-category.developer-tools"
-    },
-    "linux": {
-      "category": "Development"
+  "config": {
+    "forge": {
+      "make_targets": {
+        "win32": [
+          "squirrel"
+        ],
+        "darwin": [
+          "zip"
+        ],
+        "linux": [
+          "deb",
+          "rpm",
+          "flatpak"
+        ]
+      },
+      "electronPackagerConfig": {
+        "executableName": "saide",
+        "packageManager": "npm"
+      },
+      "electronWinstallerConfig": {
+        "name": "SAIDE",
+        "description": "Sherwood Architecture IDE"
+      },
+      "electronInstallerDebian": {
+        "categories": [
+          "Development"
+        ],
+        "description": "Sherwood Architecture IDE",
+        "section": "editors"
+      },
+      "electronInstallerFlatpak": {
+        "runtime": "org.freedesktop.Platform",
+        "id": "com.rosssoftware.saide",
+        "genericName": "SAIDE",
+        "description": "Sherwood Architecture IDE",
+        "categories": [
+          "Development"
+        ]
+      },
+      "electronInstallerRedhat": {},
+      "github_repository": {
+        "owner": "Ross-Technologies",
+        "name": "SherwoodArch"
+      },
+      "windowsStoreConfig": {
+        "packageName": "saide",
+        "name": "SAIDE"
+      }
     }
+  },
+  "dependencies": {
+    "codemirror": "^5.40.2",
+    "electron-compile": "^6.4.3",
+    "electron-squirrel-startup": "^1.0.0",
+    "jquery": "^3.3.1",
+    "winston": "^3.1.0",
+    "xterm": "^3.8.0"
+  },
+  "devDependencies": {
+    "babel-plugin-transform-async-to-generator": "^6.24.1",
+    "babel-preset-env": "^1.7.0",
+    "babel-preset-react": "^6.24.1",
+    "electron-forge": "^5.2.2",
+    "electron-prebuilt-compile": "3.0.2",
+    "eslint": "^3.19.0",
+    "eslint-config-airbnb": "^15.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jsx-a11y": "^5.1.1",
+    "eslint-plugin-react": "^7.11.1"
   }
 }

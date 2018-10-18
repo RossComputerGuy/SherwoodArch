@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<link rel="stylesheet" href="libs/uikit/css/uikit.min.css" />
+		<link rel="stylesheet" href="../node_modules/codemirror/lib/codemirror.css" />
+		<title>SAIDE</title>
+	</head>
+	<body>
+		<!-- Screen -->
+		<div class="screen-homescreen">
+			<div class="uk-container">
+				<h1 class="uk-heading-divider">Welcome</h1>
+				<p>Welcome, this is the official IDE for the Sherwood Architecture. Click "Load Project" or "Create Project" to begin.</p>
+				
+				<button uk-toggle="target: #load-proj" class="uk-button uk-button-default ui-project-load">Load Project</button>
+				<button uk-toggle="target: #create-proj" class="uk-button uk-button-default ui-project-create">Create Project</button>
+			</div>
+		</div>
+		<div class="screen-ide">
+			<div class="uk-grid-collapse uk-child-width-expand@s uk-text-left" uk-grid>
+				<!-- Files -->
+				<div class="uk-width-small uk-height-large uk-background-primary uk-light">
+					<h1 class="uk-heading-divider ide-projname"></h1>
+					<ul class="uk-list uk-list-divider uk-background-secondary uk-light ide-files" style="width:100%;height:100%"></ul>
+				</div>
+				
+				<!-- Editor -->
+				<div class="uk-width-large uk-background-primary uk-light uk-height-large">
+					<h1 class="ide-editor-name uk-align-left uk-heading-divider">main.s</h1>
+					<div class="uk-textarea uk-background-secondary uk-light" style="resize: none;width:100%;height:100%;">
+						<textarea class="ide-editor" style="resize: none" id="ide-editor"></textarea>
+					</div>
+				</div>
+			</div>
+		</div>
+		
+		<!-- Modals -->
+		<div id="load-proj" uk-modal>
+			<div class="uk-modal-dialog uk-modal-body">
+				<h2 class="uk-modal-title">Load Project <button class="uk-button uk-button-default uk-modal-close" type="button"><span uk-icon="icon: close"></span></button></h2>
+				<h1 class="uk-heading-bullet">Project Selection</h1>
+				<p>Click on a project to load.<br />Projects only in <span class="path-workspace"></span> are shown.</p>
+				<ul class="uk-list uk-list-divider load-proj-projects">
+				</ul>
+				<h1 class="uk-heading-bullet">Load Project from path</h1>
+				<input class="uk-input load-proj-path" type="text" placeholder="Path" />
+				<button class="uk-button uk-button-default load-proj-done" disabled>Done</button>
+			</div>
+		</div>
+		<div id="create-proj" uk-modal>
+			<div class="uk-modal-dialog uk-modal-body">
+				<h2 class="uk-modal-title">Create Project <button class="uk-button uk-button-default uk-modal-close" type="button"><span uk-icon="icon: close"></span></button></h2>
+				<h1 class="uk-heading-bullet">Project Information</h1>
+				<input class="uk-input create-proj-name" type="text" placeholder="Name" />
+				<textarea class="uk-textarea create-proj-desc" rows="5" placeholder="Description"></textarea>
+				<input class="uk-input create-proj-path" type="text" placeholder="Path" />
+				<button class="uk-button uk-button-default create-proj-done">Done</button>
+			</div>
+		</div>
+		
+		<!-- Scripts -->
+		<script>
+			const jQuery = require("jquery");
+			const $ = jQuery;
+			
+			const CodeMirror = require("codemirror");
+			
+			const path = require("path");
+			const paths = require("./paths");
+			const Project = require("./project");
+			const fs = require("fs");
+			const { remote } = require("electron");
+			const workspace = require("./workspace");
+			
+			var IDE = {
+				project: null,
+				openFile: "main.s",
+				logger: require("./logger"),
+				editor: null,
+				edited: false,
+				loadProject: () => {
+					showScreen("ide");
+					$(".ide-projname").text(IDE.project.name);
+					IDE.project.on("file/created",p => {
+						p = p.replace(IDE.project.getSourceDir()+
+path.sep,"");
+						IDE.loadFiles();
+					});
+					IDE.editor.setValue(fs.readFileSync(path.join(IDE.project.getSourceDir(),IDE.openFile)).toString());
+				},
+				loadFiles: () => {
+					var files = [];
+					for(var f of fs.readdirSync(IDE.project.getSourceDir())) {
+						if(fs.lstatSync(path.join(IDE.project.getSourceDir(),f)).isFile()) {
+							files.push("<li><a>"+f+"</a></li>");
+						}
+					}
+					$(".ide-files").html(files);
+					IDE.editor.setValue(fs.readFileSync(path.join(IDE.project.getSourceDir(),IDE.openFile)).toString());
+					if(IDE.edited) $(".ide-editor-name").text(IDE.openFile+"*");
+				},
+				save: () => {
+					var str = IDE.editor.getValue();
+					fs.writeFileSync(path.join(IDE.project.getSourceDir(),IDE.openFile),str);
+					IDE.edited = false;
+					
+					$(".ide-editor-name").text(IDE.openFile);
+				}
+			};
+			
+			function loadProject(name) {
+				UIkit.modal($("#load-proj")).hide();
+				if(IDE.project) {
+					IDE.project.unload();
+					IDE.project = null;
+				}
+				IDE.project = Project.fromName(name);
+				IDE.loadProject();
+			}
+			
+			function scanProjects() {
+				var html = [];
+				for(var name of workspace.getProjectNames()) {
+					html.push("<li><a class=\"uk-button uk-button-default\" href=\"#!\" onclick=\"loadProject('"+name+"')\">"+name+"</a></li>");
+				}
+				$(".load-proj-projects").html(html);
+			}
+			
+			function showScreen(scrn) {
+				var screens = ["screen-homescreen","screen-ide"];
+				for(var screen of screens) $("."+screen).hide();
+				$(".screen-"+scrn).show();
+				
+				switch(scrn) {
+					case "homescreen":
+						if(IDE.project) {
+							IDE.project.unload();
+							IDE.project = null;
+						}
+						$(".ui-project-load").attr("disabled",workspace.getProjectNames().length == 0);
+						$(".create-proj-path").val(paths["WORKSPACE"]);
+						$(".create-proj-done").attr("disabled",true);
+						scanProjects();
+						break;
+					case "ide":
+						IDE.loadFiles();
+						break;
+				}
+			}
+			
+			remote.Menu.setApplicationMenu((() => {
+				var menu = require("./menu");
+				
+				// File -> New
+				menu[0].submenu[0].click = (menuItem,browserWindow,event) => {
+					UIkit.modal.prompt("File name:","").then(str => {
+						if(fs.existsSync(path.join(IDE.project.getSourceDir(),str))) return UIkit.modal.alert("File \""+str+"\" already exists");
+						fs.writeFileSync(path.join(IDE.project.getSourceDir(),str),"");
+					});
+				};
+				
+				// File -> Save
+				menu[0].submenu[4].click = (menuItem,browserWindow,event) => {
+					IDE.save();
+				};
+				
+				// File -> Save As
+				menu[0].submenu[5].click = (menuItem,browserWindow,event) => {
+					UIkit.modal.prompt("File name:","").then(str => {
+						if(fs.existsSync(path.join(IDE.project.getSourceDir(),str))) return UIkit.modal.alert("File \""+str+"\" already exists");
+						IDE.openFile = str;
+						$(".ide-editor-name").text(IDE.openFile);
+						IDE.save();
+					});
+				};
+				
+				// Project -> Build
+				menu[3].submenu[0].click = (menuItem,browserWindow,event) => {};
+				
+				// Project -> Clean
+				menu[3].submenu[1].click = (menuItem,browserWindow,event) => {};
+				
+				// Project -> Run
+				menu[3].submenu[3].click = (menuItem,browserWindow,event) => {};
+				
+				// Project -> Run Debug
+				menu[3].submenu[4].click = (menuItem,browserWindow,event) => {};
+				
+				// Project -> Close
+				menu[3].submenu[6].click = (menuItem,browserWindow,event) => {
+					showScreen("homescreen");
+				};
+				
+				return remote.Menu.buildFromTemplate(menu);
+			})());
+			
+			$(document).ready(() => {
+				IDE.logger.info("Starting UI");
+				
+				window.onerror = e => {
+					UIkit.modal.alert(e.toString());
+					IDE.logger.error(e);
+				};
+				
+				$(".path-workspace").text(paths["WORKSPACE"]);
+				
+				$(".create-proj-name").on("input",e => {
+					var id = $(".create-proj-name").val().split(" ").join("-");
+					var p = path.join(paths["WORKSPACE"],id);
+					$(".create-proj-path").val(p);
+					$(".create-proj-done").attr("disabled",id.length == 0);
+				});
+				$(".create-proj-done").on("click",() => {
+					var id = $(".create-proj-name").val().split(" ").join("-");
+					var p = path.join(paths["WORKSPACE"],id);
+					if(fs.existsSync(p)) {
+						UIkit.modal.alert("Project \""+$(".create-proj-name").val()+"\" already exists.");
+					} else {
+						UIkit.modal($("#create-proj")).hide();
+						try {
+							IDE.project = workspace.createProject(p,{
+								name: $(".create-proj-name").val(),
+								description: $(".create-proj-description").val()
+							});
+							IDE.loadProject();
+						} catch(ex) {
+							UIkit.modal.alert(ex.toString());
+							IDE.logger.error(ex);
+						}
+					}
+				});
+				
+				$(".load-proj-path").on("input",e => {
+					$(".load-proj-done").attr("disabled",!fs.existsSync(path.join($(".load-proj-path").val(),"project.json")));
+				});
+				
+				$(".load-proj-done").on("click",() => {
+					try {
+						UIkit.modal($("#load-proj")).hide();
+						if(IDE.project) {
+							IDE.project.unload();
+							IDE.project = null;
+						}
+						IDE.project = Project.fromPath($(".load-proj-path").val());
+						IDE.loadProject();
+					} catch(ex) {
+						UIkit.modal.alert(ex.toString());
+						IDE.logger.error(ex);
+					}
+				});
+				
+				IDE.editor = CodeMirror.fromTextArea(document.getElementById("ide-editor"),{
+					lineNumbers: true,
+					tabSize: require("./settings").read()["tabSize"],
+					indentWithTabs: require("./settings").read()["indentWithTabs"],
+					dragDrop: false
+				});
+				IDE.editor.on("change",() => {
+					if(IDE.project) {
+						IDE.edited = IDE.editor.getValue() != fs.readFileSync(path.join(IDE.project.getSourceDir(),IDE.openFile)).toString();
+						if(IDE.edited) $(".ide-editor-name").text(IDE.openFile+"*");
+					}
+				});
+				
+				showScreen("homescreen");
+				IDE.logger.info("Started UI");
+			});
+		</script>
+		<script src="libs/uikit/js/uikit.min.js"></script>
+		<script src="libs/uikit/js/uikit-icons.min.js"></script>
+	</body>
+</html>

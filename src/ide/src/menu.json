@@ -1,0 +1,37 @@
+[
+	{
+		"label": "File",
+		"submenu": [
+			{ "label": "New", "id": "file/new", "accelerator": "Ctrl+N" },
+			{ "type": "separator" },
+			{ "label": "Open", "id": "file/open", "accelerator": "Ctrl+O" },
+			{ "type": "separator" },
+			{ "label": "Save", "id": "file/save", "accelerator": "Ctrl+S" },
+			{ "label": "Save As", "id": "file/saveAs", "accelerator": "Ctrl+Shift+S" },
+			{ "type": "separator" },
+			{ "label": "Quit", "role": "quit" }
+		]
+	},
+	{ "label": "Edit", "role": "editMenu" },
+	{
+		"label": "View",
+		"submenu": [
+			{ "label": "Reset Zoom", "role": "resetZoom" },
+			{ "type": "separator" },
+			{ "label": "Zoom In", "role": "zoomIn" },
+			{ "label": "Zoom Out", "role": "zoomOut" }
+		]
+	},
+	{
+		"label": "Project",
+		"submenu": [
+			{ "label": "Build", "id": "project/build" },
+			{ "label": "Clean", "id": "project/clean" },
+			{ "type": "separator" },
+			{ "label": "Run", "id": "project/run" },
+			{ "label": "Run Debug", "id": "project/runDebug" },
+			{ "type": "separator" },
+			{ "label": "Close", "id": "project/close" }
+		]
+	}
+]
