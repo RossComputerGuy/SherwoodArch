@@ -10,11 +10,11 @@ const program = require("commander")
 	.parse(process.argv);
 
 var asm = new Assembler();
-var program = asm.compileFiles(program.args[i]).instrs;
+var prog = asm.compileFiles(program.args).instrs;
 for(var err of asm.errors) {
 	console.error(err);
 }
 if(asm.errors.length > 0) process.exit(1);
-if(program.verbose) console.log("Total Size of Binary: "+program.length+" Bytes");
+if(program.verbose) console.log("Total Size of Binary: "+prog.length+" Bytes");
 if(program.verbose) console.log("Writing to "+program.output);
-fs.writeFileSync(program.output,Buffer.from(program));
+fs.writeFileSync(program.output,Buffer.from(prog));
