@@ -127,14 +127,17 @@ class VirtualMachine extends EventEmitter {
 					}
 					break;
 				case 2:
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER) return this.intr(CPU_INT["BADPERM"]);
 					if(v > this.cpu.cores.length) return this.intr(CPU_INT["BADADDR"]);
 					this.ioctl.selectedCore = v;
 					break;
 				case 3:
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER) return this.intr(CPU_INT["BADPERM"]);
 					if(this.ioctl.selectedCore > this.cpu.cores.length) return this.intr(CPU_INT["BADADDR"]);
 					this.cpu.cores[this.ioctl.selectedCore].running = v;
 					break;
 				case 4:
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER) return this.intr(CPU_INT["BADPERM"]);
 					if(this.ioctl.selectedCore > this.cpu.cores.length) return this.intr(CPU_INT["BADADDR"]);
 					this.cpu.cores[this.ioctl.selectedCore].regs.pc[0] = v;
 					break;

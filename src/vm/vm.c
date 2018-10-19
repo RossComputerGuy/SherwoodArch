@@ -1518,6 +1518,13 @@ void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data) {
 			}
 			break;
 		case 2:
+			if(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_PRIV_USER) {
+				savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) {
+					vm->cpu.cores[vm->cpu.currentCore].running = 0;
+					return;
+				}
+			}
 			if(data > SAVM_CPU_CORE_COUNT) {
 				savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 				if(err != SAVM_ERROR_NONE) {
@@ -1529,6 +1536,13 @@ void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data) {
 			vm->io.selectedCore = 1;
 			break;
 		case 3:
+			if(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_PRIV_USER) {
+				savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) {
+					vm->cpu.cores[vm->cpu.currentCore].running = 0;
+					return;
+				}
+			}
 			if(vm->io.selectedCore > SAVM_CPU_CORE_COUNT) {
 				savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 				if(err != SAVM_ERROR_NONE) {
@@ -1540,6 +1554,13 @@ void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data) {
 			vm->cpu.cores[vm->io.selectedCore].running = data;
 			break;
 		case 4:
+			if(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_PRIV_USER) {
+				savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
+				if(err != SAVM_ERROR_NONE) {
+					vm->cpu.cores[vm->cpu.currentCore].running = 0;
+					return;
+				}
+			}
 			if(vm->io.selectedCore > SAVM_CPU_CORE_COUNT) {
 				savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
 				if(err != SAVM_ERROR_NONE) {
