@@ -42,7 +42,8 @@ class RTC {
 	cycle(vm) {}
 	createTimer(time,vm) {
 		this.timers.push(setInterval((i) => {
-			// TODO: trigger irq
+			vm.cpu.cores[vm.cpu.currentCore].regs.data[0] = i;
+			vm.intr(6);
 			clearInterval(this.timers[i]);
 			delete this.timers[i];
 		},time,this.timers.length));

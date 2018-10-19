@@ -27,7 +27,7 @@ const CPU_INT = {
 };
 
 const IO_IOCTL_BASE = 0x10000016;
-const IO_IOCTL_SIZE = 0x00000002;
+const IO_IOCTL_SIZE = 0x00000005;
 const IO_IOCTL_END = IO_IOCTL_BASE+IO_IOCTL_SIZE;
 
 const IO_RAM_BASE = 0xA0000000;
@@ -49,24 +49,32 @@ function setupRegisters() {
 	};
 }
 
+function setupCPUCore() {
+	return {
+		regs: setupRegisters(),
+		iregs: setupRegisters(),
+		
+		stack: new Float64Array(20),
+		ivt: new Float64Array(6),
+		intr: new Float64Array(1),
+		running: false,
+		irqs: []
+	};
+}
+
 class VirtualMachine extends EventEmitter {
 	constructor(opts = {}) {
 		super();
 		this.cpu = {
-			regs: setupRegisters(),
-			iregs: setupRegisters(),
-			
-			stack: new Float64Array(20),
-			ivt: new Float64Array(6),
-			intr: new Float64Array(1),
-			running: false,
 			clockspeed: opts.clockspeed || 1,
-			irqs: []
+			currentCore: 0,
+			cores: new Array(opts.cores || 4)
 		};
 		this.ioctl = {
 			ram: new Float64Array(opts.ramSize || IO_RAM_SIZE),
 			mmap: [],
-			pgdir: null
+			pgdir: null,
+			selectedCore: 0
 		};
 		this.opts = opts;
 		
@@ -91,11 +99,14 @@ class VirtualMachine extends EventEmitter {
 		this.mmap(IO_IOCTL_BASE,IO_IOCTL_END,i => {
 			switch(i) {
 				case 0: return this.ioctl.ram.length;
+				case 2: return this.cpu.cores.length;
+				case 3: return this.cpu.currentCore;
+				case 4: return this.ioctl.selectedCore;
 			}
 		},(i,v) => {
 			switch(i) {
 				case 1:
-					if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER) return this.intr(CPU_INT["BADPERM"]);
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER) return this.intr(CPU_INT["BADPERM"]);
 					this.ioctl.pgdir = {};
 					this.ioctl.pgdir.tables = new Array(this.read(addr));
 					for(var i = 0;i < this.ioctl.pgdir.tables.length;i++) {
@@ -115,6 +126,19 @@ class VirtualMachine extends EventEmitter {
 						data += 1;
 					}
 					break;
+				case 2:
+					if(v > this.cpu.cores.length) return this.intr(CPU_INT["BADADDR"]);
+					this.ioctl.selectedCore = v;
+					break;
+				case 3:
+					if(this.ioctl.selectedCore > this.cpu.cores.length) return this.intr(CPU_INT["BADADDR"]);
+					this.cpu.cores[this.ioctl.selectedCore].running = v;
+					break;
+				case 4:
+					if(this.ioctl.selectedCore > this.cpu.cores.length) return this.intr(CPU_INT["BADADDR"]);
+					this.cpu.cores[this.ioctl.selectedCore].regs.pc[0] = v;
+					break;
+					
 			}
 		});
 		this.mmap(IO_RAM_BASE,IO_RAM_END,i => this.ioctl.ram[i],(i,v) => { this.ioctl.ram[i] = v; });
@@ -129,117 +153,126 @@ class VirtualMachine extends EventEmitter {
 		/* Reset the UART */
 		if(this.uart) this.uart.reset(this);
 		
-		/* Reset the registers */
-		this.cpu.regs = this.cpu.iregs = setupRegisters();
+		for(var i = 0;i < this.cpu.cores.length;i++) {
+			this.cpu.cores[i] = setupCPUCore();
+			
+			/* Reset the registers */
+			this.cpu.cores[i].regs = this.cpu.cores[i].iregs = setupRegisters();
+			this.cpu.cores[i].irqs = [];
+			this.cpu.cores[i].stack.fill(0);
+			this.cpu.cores[i].ivt.fill(0);
+			this.cpu.cores[i].intr[0] = 0;
+			this.cpu.cores[i].running = false;
+		}
+		
 		
 		/* Reset the CPU */
-		this.cpu.irqs = [];
-		this.cpu.stack.fill(0);
-		this.cpu.ivt.fill(0);
-		this.cpu.intr[0] = 0;
-		this.cpu.running = false;
-		this.cpu.regs.pc[0] = IO_RAM_BASE;
+		this.cpu.cores[this.cpu.currentCore].regs.pc[0] = IO_RAM_BASE;
 		
 		this.emit("reset");
 	}
 	
 	intr(i) {
-		if(i > this.cpu.ivt.length) throw new Error("SAVM_ERROR_INVAL_INT");
-		if(i > 5 && this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ) return this.cpu.irqs.push(i);
-		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) {
-			this.cpu.intr[0] = CPU_INT["FAULT"];
+		if(i > this.cpu.cores[this.cpu.currentCore].ivt.length) throw new Error("SAVM_ERROR_INVAL_INT");
+		if(i > 5 && this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_ENIRQ) return this.cpu.cores[this.cpu.currentCore].irqs.push(i);
+		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR) {
+			this.cpu.cores[this.cpu.currentCore].intr[0] = CPU_INT["FAULT"];
 			return this.emit("cpu/interrupt",i);
 		}
-		if(i > 5 && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ)) return;
-		this.cpu.iregs = this.cpu.regs;
-		this.cpu.regs.flags[0] |= CPU_REG_FLAG_INTR & CPU_REG_FLAG_PRIV_KERN;
-		this.cpu.regs.flags[0] &= ~CPU_REG_FLAG_PRIV_USER;
-		this.cpu.intr[0] = i;
-		this.cpu.regs.pc[0] = this.cpu.ivt[i];
+		if(i > 5 && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_ENIRQ)) return;
+		this.cpu.cores[this.cpu.currentCore].iregs = this.cpu.cores[this.cpu.currentCore].regs;
+		this.cpu.cores[this.cpu.currentCore].regs.flags[0] |= CPU_REG_FLAG_INTR & CPU_REG_FLAG_PRIV_KERN;
+		this.cpu.cores[this.cpu.currentCore].regs.flags[0] &= ~CPU_REG_FLAG_PRIV_USER;
+		this.cpu.cores[this.cpu.currentCore].intr[0] = i;
+		this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.cpu.cores[this.cpu.currentCore].ivt[i];
 		
 		this.emit("cpu/interrupt",i);
 	}
 	regread(i) {
 		this.emit("cpu/registers/read",i);
 		switch(i) {
-			case 0: /* flags */ return this.cpu.regs.flags[0];
-			case 1: /* tmp */ return this.cpu.regs.tmp[0];
-			case 2: /* sp */ return this.cpu.regs.sp[0];
-			case 3: /* ip */ return this.cpu.regs.ip[0];
-			case 4: /* pc */ return this.cpu.regs.pc[0];
-			case 5: /* cycle */ return this.cpu.regs.cycle[0];
+			case 0: /* flags */ return this.cpu.cores[this.cpu.currentCore].regs.flags[0];
+			case 1: /* tmp */ return this.cpu.cores[this.cpu.currentCore].regs.tmp[0];
+			case 2: /* sp */ return this.cpu.cores[this.cpu.currentCore].regs.sp[0];
+			case 3: /* ip */ return this.cpu.cores[this.cpu.currentCore].regs.ip[0];
+			case 4: /* pc */ return this.cpu.cores[this.cpu.currentCore].regs.pc[0];
+			case 5: /* cycle */ return this.cpu.cores[this.cpu.currentCore].regs.cycle[0];
 			default:
-				if(i >= 6 && i < 16) return this.cpu.regs.data[i-6];
-				if(i >= 17 && i < 27) return this.cpu.regs.index[i-17];
-				if(i >= 28 && i < 38) return this.cpu.regs.addr[i-28];
-				if(i >= 39 && i < 49) return this.cpu.regs.ptr[i-39];
+				if(i >= 6 && i < 16) return this.cpu.cores[this.cpu.currentCore].regs.data[i-6];
+				if(i >= 17 && i < 27) return this.cpu.cores[this.cpu.currentCore].regs.index[i-17];
+				if(i >= 28 && i < 38) return this.cpu.cores[this.cpu.currentCore].regs.addr[i-28];
+				if(i >= 39 && i < 49) return this.cpu.cores[this.cpu.currentCore].regs.ptr[i-39];
 				throw new Error("SAVM_ERROR_INVAL_ADDR");
 		}
 	}
 	regwrite(i,v) {
 		switch(i) {
 			case 0: /* flags */
-				if(val & CPU_REG_FLAG_INTR && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR)) val &= ~CPU_REG_FLAG_INTR;
-				if(val & CPU_REG_FLAG_PAGING && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_PAGING)) val &= ~SAVM_CPU_REG_FLAG_PAGING;
-				if(val & CPU_REG_FLAG_PRIV_KERN && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_KERN)) val &= ~SAVM_CPU_REG_FLAG_PRIV_KERN;
-				if(val & CPU_REG_FLAG_PRIV_USER && !(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) val &= ~CPU_REG_FLAG_PRIV_USER;
+				if(val & CPU_REG_FLAG_INTR && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR)) val &= ~CPU_REG_FLAG_INTR;
+				if(val & CPU_REG_FLAG_PAGING && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING)) val &= ~SAVM_CPU_REG_FLAG_PAGING;
+				if(val & CPU_REG_FLAG_PRIV_KERN && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_KERN)) val &= ~SAVM_CPU_REG_FLAG_PRIV_KERN;
+				if(val & CPU_REG_FLAG_PRIV_USER && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) val &= ~CPU_REG_FLAG_PRIV_USER;
 				
-				if(!(this.cpu.regs.flags[0] & SAVM_CPU_REG_FLAG_PAGING) && val & SAVM_CPU_REG_FLAG_PAGING) {
+				if(!(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & SAVM_CPU_REG_FLAG_PAGING) && val & SAVM_CPU_REG_FLAG_PAGING) {
 					if(this.ioctl.pgdir == null) return this.intr(CPU_INT["FAULT"]);
 				}
-				this.cpu.regs.flags[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.flags[0] = v;
 				break;
 			case 1: /* tmp */
-				this.cpu.regs.tmp[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = v;
 				break;
 			case 2: /* sp */
-				this.cpu.regs.sp[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.sp[0] = v;
 				break;
 			case 3: /* ip */
-				this.cpu.regs.ip[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.ip[0] = v;
 				break;
 			case 4: /* pc */
-				this.cpu.regs.pc[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.pc[0] = v;
 				break;
 			case 5: /* cycle */
-				this.cpu.regs.cycle[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.cycle[0] = v;
 				break;
 			default:
 				if(i >= 6 && i < 16) {
-					this.cpu.regs.data[i-6] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.data[i-6] = v;
 					break;
 				}
 				if(i >= 17 && i < 27) {
-					this.cpu.regs.index[i-17] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.index[i-17] = v;
 					break;
 				}
 				if(i >= 28 && i < 38) {
-					this.cpu.regs.addr[i-28] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.addr[i-28] = v;
 					break;
 				}
 				if(i >= 39 && i < 49) {
-					this.cpu.regs.ptr[i-39] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.ptr[i-39] = v;
 					break;
 				}
 				throw new Error("SAVM_ERROR_INVAL_ADDR");
 		}
 		this.emit("cpu/registers/write",i,v);
 	}
-	cycle() {
-		if(this.cpu.regs.pc[0] == 0) this.cpu.regs.pc[0] = IO_RAM_BASE+(this.cpu.regs.cycle[0]*3);
+	cycleCore(core) {
+		if(core > this.cpu.cores.length) throw new Error("SAVM_ERROR_INVAL_ADDR");
+		
+		this.cpu.currentCore = core;
+	
+		if(this.cpu.cores[this.cpu.currentCore].regs.pc[0] == 0) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = IO_RAM_BASE+(this.cpu.cores[this.cpu.currentCore].regs.cycle[0]*3);
 		
 		/* Fetches the instruction from memory */
-		this.cpu.regs.ip[0] = this.read(this.cpu.regs.pc[0]);
+		this.cpu.cores[this.cpu.currentCore].regs.ip[0] = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]);
 		
 		/* Decodes the instruction */
-		var addr = this.read(this.cpu.regs.pc[0]+1);
-		var val = this.read(this.cpu.regs.pc[0]+2);
+		var addr = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+1);
+		var val = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+2);
 		
-		this.cpu.regs.pc[0] += 3;
+		this.cpu.cores[this.cpu.currentCore].regs.pc[0] += 3;
 		
 		/* Execute the instruction */
 		try {
-			switch(this.cpu.regs.ip[0]) {
+			switch(this.cpu.cores[this.cpu.currentCore].regs.ip[0]) {
 				case 0: /* NOP */
 					this.stop();
 					break;
@@ -318,65 +351,65 @@ class VirtualMachine extends EventEmitter {
 					this.write(addr,this.read(addr) >> this.read(val));
 					break;
 				case 23: /* CMPR */
-					this.cpu.regs.tmp[0] = this.regread(addr) == this.regread(val);
+					this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) == this.regread(val);
 					break;
 				case 24: /* CMPM */
-					this.cpu.regs.tmp[0] = this.read(addr) == this.read(val);
+					this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) == this.read(val);
 					break;
 				case 25: /* JITR */
-					if(this.cpu.regs.tmp[0]) this.cpu.regs.pc[0] = this.regread(addr);
+					if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
 					break;
 				case 26: /* JITM */
-					if(this.cpu.regs.tmp[0]) this.cpu.regs.pc[0] = this.read(addr);
+					if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
 					break;
 				case 27: /* JIT */
-					if(this.cpu.regs.tmp[0]) this.cpu.regs.pc[0] = addr;
+					if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
 					break;
 				case 28: /* JMPR */
-					this.cpu.regs.pc[0] = this.regread(addr);
+					this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
 					break;
 				case 29: /* JMPM */
-					this.cpu.regs.pc[0] = this.read(addr);
+					this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
 					break;
 				case 30: /* JMP */
-					this.cpu.regs.pc[0] = addr;
+					this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
 					break;
 				case 31: /* CALLR */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) {
-						this.cpu.stack[this.cpu.regs.sp[0]++] = this.cpu.regs.pc[0];
-						this.cpu.regs.pc[0] = this.regread(addr);
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
+						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
+						this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
 					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 32: /* CALLM */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) {
-						this.cpu.stack[this.cpu.regs.sp[0]++] = this.cpu.regs.pc[0];
-						this.cpu.regs.pc[0] = this.read(addr);
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
+						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
+						this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
 					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 33: /* CALL */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) {
-						this.cpu.stack[this.cpu.regs.sp[0]++] = this.cpu.regs.pc[0];
-						this.cpu.regs.pc[0] = addr;
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
+						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
+						this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
 					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 34: /* RET */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.cpu.regs.pc[0] = this.cpu.stack[this.cpu.regs.sp[0]--];
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--];
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 35: /* PUSHR */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.cpu.stack[this.cpu.regs.sp[0]++] = this.regread(addr);
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.regread(addr);
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 36: /* PUSHM */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.cpu.stack[this.cpu.regs.sp[0]++] = this.read(addr);
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.read(addr);
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 37: /* POPR */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.regwrite(addr,this.cpu.stack[this.cpu.regs.sp[0]--]);
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.regwrite(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 38: /* POPM */
-					if(this.cpu.regs.sp[0] < this.cpu.stack.length) this.write(addr,this.cpu.stack[this.cpu.regs.sp[0]--]);
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.write(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 39: /* MOVRR */
@@ -398,7 +431,7 @@ class VirtualMachine extends EventEmitter {
 					this.write(addr,val);
 					break;
 				case 45: /* INTR */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						var a = this.regread(addr);
 						try {
 							this.intr(a);
@@ -408,7 +441,7 @@ class VirtualMachine extends EventEmitter {
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 46: /* INTM */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						var a = this.read(addr);
 						try {
 							this.intr(a);
@@ -418,7 +451,7 @@ class VirtualMachine extends EventEmitter {
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 47: /* INT */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						try {
 							this.intr(addr);
 						} catch(ex) {
@@ -427,33 +460,33 @@ class VirtualMachine extends EventEmitter {
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 48: /* IRET */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.regs = this.cpu.iregs;
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.cores[this.cpu.currentCore].regs = this.cpu.cores[this.cpu.currentCore].iregs;
 						else this.intr(CPU_INT["FAULT"]);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 49: /* LDITBLR */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						addr = this.regread(addr);
-						for(var i = 0;i < this.cpu.ivt.length;i++) this.cpu.ivt[i] = this.read(addr+i);
+						for(var i = 0;i < this.cpu.cores[this.cpu.currentCore].ivt.length;i++) this.cpu.cores[this.cpu.currentCore].ivt[i] = this.read(addr+i);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 50: /* LDITBLM */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						addr = this.read(addr);
-						for(var i = 0;i < this.cpu.ivt.length;i++) this.cpu.ivt[i] = this.read(addr+i);
+						for(var i = 0;i < this.cpu.cores[this.cpu.currentCore].ivt.length;i++) this.cpu.cores[this.cpu.currentCore].ivt[i] = this.read(addr+i);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 51: /* HLT */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) this.stop();
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) this.stop();
 					else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 52: /* RST */
-					if(this.cpu.regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						this.stop();
 						this.reset();
 						this.start();
-						this.cpu.regs.cycle[0] = -1;
+						this.cpu.cores[this.cpu.currentCore].regs.cycle[0] = -1;
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				default:
@@ -468,11 +501,17 @@ class VirtualMachine extends EventEmitter {
 		if(this.mailbox) this.mailbox.cycle(this);
 		if(this.uart) this.uart.cycle(this);
 		
-		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_INTR && this.cpu.regs.flags[0] & CPU_REG_FLAG_ENIRQ && this.cpu.irqs.length > 0) this.intr(this.cpu.irqs.shift());
+		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR && this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_ENIRQ && this.cpu.cores[this.cpu.currentCore].irqs.length > 0) this.intr(this.cpu.cores[this.cpu.currentCore].irqs.shift());
 		
+		this.emit("cpu/cycleCore",core);
+		
+		this.cpu.cores[this.cpu.currentCore].regs.cycle[0]++;
+	}
+	cycle() {
+		for(var i = 0;i < this.cpu.cores.length;i++) {
+			if(this.cpu.cores[i].running) this.cycleCore(i);
+		}
 		this.emit("cpu/cycle");
-		
-		this.cpu.regs.cycle[0]++;
 	}
 	
 	_buff2uint64(buff) {
@@ -498,16 +537,16 @@ class VirtualMachine extends EventEmitter {
 	}
 	
 	start() {
-		this.cpu.running = true;
+		this.cpu.cores[0].running = true;
 		this.emit("cpu/start");
 		this.interval = setInterval(() => {
 			this.cycle();
-			if(!this.cpu.running) this.stop();
+			if(!this.cpu.cores[0].running) this.stop();
 		},this.cpu.clockspeed);
 	}
 	stop() {
 		if(typeof(this.interval) == "number") clearInterval(this.interval);
-		this.cpu.running = false;
+		this.cpu.cores[0].running = false;
 		this.emit("cpu/stop");
 	}
 	loadFirmware(path) {
@@ -543,12 +582,12 @@ class VirtualMachine extends EventEmitter {
 	}
 	read(addr) {
 		this.emit("ioctl/read",addr);
-		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PAGING) {
+		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING) {
 			for(var table of this.ioctl.pgdir.tables) {
 				for(var pg of table.entries) {
 					if(pg.address <= addr && pg.address+pg.size > addr) {
-						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
-						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
+						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
+						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
 					}
 				}
 			}
@@ -559,12 +598,12 @@ class VirtualMachine extends EventEmitter {
 		throw new Error("SAVM_ERROR_NOTMAPPED");
 	}
 	write(addr,v) {
-		if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PAGING) {
+		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING) {
 			for(var table of this.ioctl.pgdir.tables) {
 				for(var pg of table.entries) {
 					if(pg.address <= addr && pg.address+pg.size > addr) {
-						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
-						if(this.cpu.regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
+						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
+						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
 					}
 				}
 			}

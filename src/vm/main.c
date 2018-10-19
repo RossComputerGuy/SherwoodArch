@@ -82,16 +82,16 @@ int main(int argc,char** argv) {
 		}
 	}
 	
-	vm.cpu.running = 1;
+	vm.cpu.cores[0].running = 1;
 	
-	while(vm.cpu.running) {
+	while(vm.cpu.cores[0].running) {
 		int msec = 0;
 		clock_t before = clock();
 		do {
 			err = savm_cpu_cycle(&vm);
 			if(err != SAVM_ERROR_NONE) {
 				printf("savm_cpu_cycle(): %d\n",err);
-				vm.cpu.running = 0;
+				vm.cpu.cores[0].running = 0;
 				break;
 			}
 			clock_t difference = clock()-before;

@@ -42,6 +42,10 @@
 #define SAVM_CPU_IVT_SIZE 9
 #endif
 
+#ifndef SAVM_CPU_CORE_COUNT
+#define SAVM_CPU_CORE_COUNT 4
+#endif
+
 /* CPU -> IVT */
 
 #ifndef SAVM_CPU_INT_STACK_OVERFLOW
@@ -155,7 +159,7 @@
 #endif
 
 #ifndef SAVM_IO_IOCTL_SIZE
-#define SAVM_IO_IOCTL_SIZE 0x00000002
+#define SAVM_IO_IOCTL_SIZE 0x00000005
 #endif
 
 #ifndef SAVM_IO_IOCTL_END
@@ -219,20 +223,25 @@ typedef struct {
 	savm_pagetbl_t* tables;
 } savm_pagedir_t;
 
+typedef struct {
+	savm_cpu_regs_t regs;
+	
+	/* The registers before the interrupt */
+	savm_cpu_regs_t iregs;
+		
+	uint64_t stack[SAVM_CPU_STACK_SIZE];
+	uint64_t ivt[SAVM_CPU_IVT_SIZE];
+	uint64_t intr;
+	int running;
+	
+	uint64_t* irqs;
+	size_t irqSize;
+} savm_cpu_core_t;
+
 typedef struct savm {
 	struct {
-		savm_cpu_regs_t regs;
-		
-		/* The registers before the interrupt */
-		savm_cpu_regs_t iregs;
-		
-		uint64_t stack[SAVM_CPU_STACK_SIZE];
-        uint64_t ivt[SAVM_CPU_IVT_SIZE];
-        uint64_t intr;
-		int running;
-		
-		uint64_t* irqs;
-		size_t irqSize;
+		savm_cpu_core_t cores[SAVM_CPU_CORE_COUNT];
+		uint8_t currentCore;
 	} cpu;
 	struct {
 		uint64_t* ram;
@@ -241,6 +250,8 @@ typedef struct savm {
 		savm_io_mmap_entry_t* mmap;
 		
 		savm_pagedir_t* pgdir;
+		
+		uint8_t selectedCore;
 	} io;
 	
 	savm_mailbox_t mailbox;
@@ -255,6 +266,7 @@ savm_error_e savm_reset(savm_t* vm);
 savm_error_e savm_cpu_intr(savm_t* vm,uint64_t intr);
 savm_error_e savm_cpu_regread(savm_t* vm,uint64_t i,uint64_t* val);
 savm_error_e savm_cpu_regwrite(savm_t* vm,uint64_t i,uint64_t val);
+savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t i);
 savm_error_e savm_cpu_cycle(savm_t* vm);
 
 savm_error_e savm_ioctl_loadfile(savm_t* vm,uint64_t addr,char* path);

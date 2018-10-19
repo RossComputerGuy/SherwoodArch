@@ -26,8 +26,8 @@ savm_error_e savm_rtc_reset(savm_rtc_t* rtc,savm_t* vm) {
 savm_error_e savm_rtc_cycle(savm_rtc_t* rtc,struct savm* vm) {
 	for(size_t i = 0;i < rtc->timerCount;i++) {
 		rtc->timers[i].since = clock()*1000/CLOCKS_PER_SEC;
-		if(rtc->timers[i].since <= rtc->timers[i].end && !(vm->cpu.regs.flags & SAVM_CPU_REG_FLAG_INTR)) {
-			vm->cpu.regs.data[0] = i;
+		if(rtc->timers[i].since <= rtc->timers[i].end && !(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_INTR)) {
+			vm->cpu.cores[vm->cpu.currentCore].regs.data[0] = i;
 			savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_TIMER);
 			if(err != SAVM_ERROR_NONE) return err;
 			vm->rtc.timers[i].finished = 1;
