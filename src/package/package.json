@@ -1,5 +1,5 @@
 {
-  "name": "sajs",
+  "name": "@ross-technologies/sajs",
   "version": "1.0.0",
   "description": "The Sherwood Architecture for Node.js",
   "main": "index.js",
@@ -19,6 +19,22 @@
     "browserify": "^16.2.3"
   },
   "bin": {
+    "sasmc": "bin/sasmc.js",
     "savm": "bin/savm.js"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ross-Technologies/SherwoodArch.git"
+  },
+  "keywords": [
+    "assembler",
+    "cpu",
+    "tools",
+    "virtual-machine",
+    "vm"
+  ],
+  "bugs": {
+    "url": "https://github.com/Ross-Technologies/SherwoodArch/issues"
+  },
+  "homepage": "https://github.com/Ross-Technologies/SherwoodArch#readme"
 }
