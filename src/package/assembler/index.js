@@ -11,6 +11,11 @@ class Assembler {
 	compileFile(path) {
 		return this.compile(fs.readFileSync(path).toString());
 	}
+	compileFiles(files) {
+		var str = [];
+		for(var file of files) str.push(fs.readFileSync(file).toString());
+		return this.compile(str.join("\n"));
+	}
 	compile(str) {
 		var parser = Parser.parseInput(str);
 		if(parser.errors.length > 0) {

@@ -19,7 +19,6 @@
     "browserify": "^16.2.3"
   },
   "bin": {
-    "sasmc": "./bin/sasmc",
-    "savm": "./bin/savm"
+    "savm": "bin/savm.js"
   }
 }

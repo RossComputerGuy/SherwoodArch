@@ -3,11 +3,12 @@
 	<head>
 		<link rel="stylesheet" href="libs/uikit/css/uikit.min.css" />
 		<link rel="stylesheet" href="../node_modules/codemirror/lib/codemirror.css" />
+		<link rel="stylesheet" href="../node_modules/xterm/dist/xterm.css" />
 		<title>SAIDE</title>
 	</head>
 	<body>
 		<!-- Screen -->
-		<div class="screen-homescreen">
+		<div class="screen-homescreen" style="width:100%;height:100%">
 			<div class="uk-container">
 				<h1 class="uk-heading-divider">Welcome</h1>
 				<p>Welcome, this is the official IDE for the Sherwood Architecture. Click "Load Project" or "Create Project" to begin.</p>
@@ -16,20 +17,25 @@
 				<button uk-toggle="target: #create-proj" class="uk-button uk-button-default ui-project-create">Create Project</button>
 			</div>
 		</div>
-		<div class="screen-ide">
-			<div class="uk-grid-collapse uk-child-width-expand@s uk-text-left" uk-grid>
+		<div class="screen-ide" style="width:100%;height:100%">
+			<div class="uk-grid-collapse uk-text-left" uk-height-match="target: > div" uk-grid>
 				<!-- Files -->
-				<div class="uk-width-small uk-height-large uk-background-primary uk-light">
+				<div class="uk-background-primary uk-light uk-width-1-6" style="height:66%">
 					<h1 class="uk-heading-divider ide-projname"></h1>
 					<ul class="uk-list uk-list-divider uk-background-secondary uk-light ide-files" style="width:100%;height:100%"></ul>
 				</div>
 				
 				<!-- Editor -->
-				<div class="uk-width-large uk-background-primary uk-light uk-height-large">
-					<h1 class="ide-editor-name uk-align-left uk-heading-divider">main.s</h1>
+				<div class="uk-background-primary uk-light uk-width-5-6" style="height:66%">
+					<h1 class="ide-editor-name uk-align-left uk-heading-divider"></h1>
 					<div class="uk-textarea uk-background-secondary uk-light" style="resize: none;width:100%;height:100%;">
 						<textarea class="ide-editor" style="resize: none" id="ide-editor"></textarea>
 					</div>
+				</div>
+			</div>
+			<div class="uk-grid-collapse uk-text-left uk-width-1-1" uk-height-match="target: > div" uk-grid>
+				<div class="uk-background-secondary uk-light uk-width-1-1" style="height:33%">
+					<div id="terminal"></div>
 				</div>
 			</div>
 		</div>
@@ -71,6 +77,23 @@
 			const fs = require("fs");
 			const { remote } = require("electron");
 			const workspace = require("./workspace");
+			const xterm = require("xterm");
+			const SherwoodArch = require("sajs");
+			
+			var deleteFolderRecursive = function(p) {
+				if(fs.existsSync(p)) {
+					fs.readdirSync(p).forEach(function(file, index){
+						var curPath = path.join(p,file);
+						if(fs.lstatSync(curPath).isDirectory()) deleteFolderRecursive(curPath);
+						else fs.unlinkSync(curPath);
+					});
+					fs.rmdirSync(p);
+				}
+			};
+			
+			var vm = new SherwoodArch.VirtualMachine({
+				ramSize: 0xA0000
+			});
 			
 			var IDE = {
 				project: null,
@@ -78,6 +101,7 @@
 				logger: require("./logger"),
 				editor: null,
 				edited: false,
+				term: null,
 				loadProject: () => {
 					showScreen("ide");
 					$(".ide-projname").text(IDE.project.name);
@@ -87,12 +111,29 @@ path.sep,"");
 						IDE.loadFiles();
 					});
 					IDE.editor.setValue(fs.readFileSync(path.join(IDE.project.getSourceDir(),IDE.openFile)).toString());
+					
+					IDE.term.clear();
+					vm.reset();
+				},
+				loadFile: f => {
+					if(IDE.edited) return UIkit.modal.confirm("Save "+IDE.openFile+" before opening "+f+"?").then(() => {
+						IDE.save();
+						IDE.loadFile(f);
+					},() => {
+						IDE.edited = false;
+						IDE.loadFile(f);
+					});
+					
+					IDE.openFile = f;
+					IDE.editor.setValue(fs.readFileSync(path.join(IDE.project.getSourceDir(),IDE.openFile)).toString());
+					IDE.edited = false;
+					$(".ide-editor-name").text(IDE.openFile);
 				},
 				loadFiles: () => {
 					var files = [];
 					for(var f of fs.readdirSync(IDE.project.getSourceDir())) {
 						if(fs.lstatSync(path.join(IDE.project.getSourceDir(),f)).isFile()) {
-							files.push("<li><a>"+f+"</a></li>");
+							files.push("<li><a onclick=\"IDE.loadFile('"+f+"')\">"+f+"</a></li>");
 						}
 					}
 					$(".ide-files").html(files);
@@ -153,38 +194,76 @@ path.sep,"");
 				
 				// File -> New
 				menu[0].submenu[0].click = (menuItem,browserWindow,event) => {
-					UIkit.modal.prompt("File name:","").then(str => {
-						if(fs.existsSync(path.join(IDE.project.getSourceDir(),str))) return UIkit.modal.alert("File \""+str+"\" already exists");
-						fs.writeFileSync(path.join(IDE.project.getSourceDir(),str),"");
-					});
+					if(IDE.project) {
+						UIkit.modal.prompt("File name:","").then(str => {
+							if(fs.existsSync(path.join(IDE.project.getSourceDir(),str))) return UIkit.modal.alert("File \""+str+"\" already exists");
+							fs.writeFileSync(path.join(IDE.project.getSourceDir(),str),"");
+						});
+					} else UIkit.modal.alert("Project is not opened");
 				};
 				
 				// File -> Save
 				menu[0].submenu[4].click = (menuItem,browserWindow,event) => {
-					IDE.save();
+					if(IDE.project) IDE.save();
+					else UIkit.modal.alert("Project is not opened");
 				};
 				
 				// File -> Save As
 				menu[0].submenu[5].click = (menuItem,browserWindow,event) => {
-					UIkit.modal.prompt("File name:","").then(str => {
-						if(fs.existsSync(path.join(IDE.project.getSourceDir(),str))) return UIkit.modal.alert("File \""+str+"\" already exists");
-						IDE.openFile = str;
-						$(".ide-editor-name").text(IDE.openFile);
-						IDE.save();
-					});
+					if(IDE.project) {
+						UIkit.modal.prompt("File name:","").then(str => {
+							if(fs.existsSync(path.join(IDE.project.getSourceDir(),str))) return UIkit.modal.alert("File \""+str+"\" already exists");
+							IDE.openFile = str;
+							$(".ide-editor-name").text(IDE.openFile);
+							IDE.save();
+						});
+					} else UIkit.modal.alert("Project is not opened");
 				};
 				
 				// Project -> Build
-				menu[3].submenu[0].click = (menuItem,browserWindow,event) => {};
+				menu[3].submenu[0].click = (menuItem,browserWindow,event) => {
+					if(IDE.project) {
+						if(!fs.existsSync(path.join(IDE.project.opts.path,"bin"))) fs.mkdirSync(path.join(IDE.project.opts.path,"bin"));
+						IDE.logger.info(SherwoodArch);
+						var asm = new SherwoodArch.Assembler();
+						var programs = [];
+						var files = [];
+						for(var f of fs.readdirSync(IDE.project.getSourceDir())) {
+							if(fs.lstatSync(path.join(IDE.project.getSourceDir(),f)).isFile()) {
+								files.push(path.join(IDE.project.getSourceDir(),f));
+							}
+						}
+						var program = asm.compileFiles(files).instrs;
+						for(var err of asm.errors) UIkit.modal.alert(err.toString());
+						if(asm.errors.length > 0) return;
+						fs.writeFileSync(path.join(IDE.project.opts.path,"bin","project.bin"),Buffer.from(program));
+					} else UIkit.modal.alert("Project is not opened");
+				};
 				
 				// Project -> Clean
-				menu[3].submenu[1].click = (menuItem,browserWindow,event) => {};
+				menu[3].submenu[1].click = (menuItem,browserWindow,event) => {
+					if(IDE.project) {
+						deleteFolderRecursive(path.join(IDE.project.opts.path,"bin").toString());
+					} else UIkit.modal.alert("Project is not opened");
+				};
 				
 				// Project -> Run
-				menu[3].submenu[3].click = (menuItem,browserWindow,event) => {};
+				menu[3].submenu[3].click = (menuItem,browserWindow,event) => {
+					if(IDE.project) {
+						IDE.term.clear();
+						vm.reset();
+						var buff = vm._buff2uint64(fs.readFileSync(path.join(IDE.project.opts.path,"bin","project.bin")));
+						for(var i = 0;i < buff.length;i++) vm.ioctl.ram[i] = buff[i];
+						vm.start();
+					} else UIkit.modal.alert("Project is not opened");
+				};
 				
-				// Project -> Run Debug
-				menu[3].submenu[4].click = (menuItem,browserWindow,event) => {};
+				// Project -> Stop
+				menu[3].submenu[4].click = (menuItem,browserWindow,event) => {
+					if(IDE.project) {
+						vm.stop();
+					} else UIkit.modal.alert("Project is not opened");
+				};
 				
 				// Project -> Close
 				menu[3].submenu[6].click = (menuItem,browserWindow,event) => {
@@ -201,6 +280,19 @@ path.sep,"");
 					UIkit.modal.alert(e.toString());
 					IDE.logger.error(e);
 				};
+				
+				//IDE.term = new xterm.Terminal();
+				IDE.term = new xterm.Terminal({
+					cols: 15,
+					cursorBlink: true,
+					cursorStyle: "block",
+					row: 10
+				});
+				IDE.term.open(document.getElementById("terminal"));
+				IDE.term.on("keypress",(key,event) => {
+					vm.uart.emit("input",key);
+				});
+				vm.uart.on("output",str => IDE.term.write(str));
 				
 				$(".path-workspace").text(paths["WORKSPACE"]);
 				

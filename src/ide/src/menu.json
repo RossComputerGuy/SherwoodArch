@@ -29,7 +29,7 @@
 			{ "label": "Clean", "id": "project/clean" },
 			{ "type": "separator" },
 			{ "label": "Run", "id": "project/run" },
-			{ "label": "Run Debug", "id": "project/runDebug" },
+			{ "label": "Stop", "id": "project/stop" },
 			{ "type": "separator" },
 			{ "label": "Close", "id": "project/close" }
 		]

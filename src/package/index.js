@@ -1,5 +1,5 @@
 module.exports = {
-	compile: require("./assembler"),
+	Assembler: require("./assembler"),
 	VirtualMachine: require("./vm")
 };
 
