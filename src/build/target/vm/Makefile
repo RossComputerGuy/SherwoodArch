@@ -1,5 +1,5 @@
 VM_OBJECTS += $(VM_BIN)/hardware/mailbox.o $(VM_BIN)/hardware/rtc.o $(VM_BIN)/hardware/uart.o
-VM_OBJECTS += $(VM_BIN)/main.o $(VM_BIN)/vm.o
+VM_OBJECTS += $(VM_BIN)/main.o $(VM_BIN)/utils.o $(VM_BIN)/vm.o
 
 $(VM_BIN)/%.o: $(VM_SRC)/%.c
 	@echo "CC $<"

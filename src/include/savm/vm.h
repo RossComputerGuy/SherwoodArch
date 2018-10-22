@@ -10,6 +10,34 @@
 #include <stdio.h>
 #include <string.h>
 
+/* Instruction -> Address Modes */
+
+#ifndef SAVM_INSTR_ADDRMODE_DEFAULT
+#define SAVM_INSTR_ADDRMODE_DEFAULT SAVM_INSTR_ADDRMODE_REG
+#endif
+
+#ifndef SAVM_INSTR_ADDRMODE_REG
+#define SAVM_INSTR_ADDRMODE_REG 0
+#endif
+
+#ifndef SAVM_INSTR_ADDRMODE_ADDR
+#define SAVM_INSTR_ADDRMODE_ADDR 1
+#endif
+
+#ifndef SAVM_INSTR_ADDRMODE_RAW
+#define SAVM_INSTR_ADDRMODE_RAW 2
+#endif
+
+/* Instruction -> Flags */
+
+#ifndef SAVM_INSTR_FLAG_SIGNED
+#define SAVM_INSTR_FLAG_SIGNED (1 << 0)
+#endif
+
+#ifndef SAVM_INSTR_FLAG_UNSIGNED
+#define SAVM_INSTR_FLAG_UNSIGNED ~SAVM_INSTR_FLAG_SIGNED
+#endif
+
 /* CPU -> Flags */
 
 #ifndef SAVM_CPU_REG_FLAG_INTR
