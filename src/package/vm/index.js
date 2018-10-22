@@ -26,6 +26,16 @@ const CPU_INT = {
 	"SYSCALL": 8
 };
 
+const INSTR_ADDRMODE = {
+	"DEFAULT": 0,
+	"REG": 0,
+	"ADDR": 1,
+	"RAW": 2
+};
+
+const INSTR_FLAG_SIGNED = (1 << 0);
+const INSTR_FLAG_UNSIGNED = ~INSTR_FLAG_SIGNED;
+
 const IO_IOCTL_BASE = 0x10000016;
 const IO_IOCTL_SIZE = 0x00000005;
 const IO_IOCTL_END = IO_IOCTL_BASE+IO_IOCTL_SIZE;
@@ -33,6 +43,8 @@ const IO_IOCTL_END = IO_IOCTL_BASE+IO_IOCTL_SIZE;
 const IO_RAM_BASE = 0xA0000000;
 const IO_RAM_SIZE = 0x40000000;
 const IO_RAM_END = IO_RAM_BASE+IO_RAM_SIZE;
+
+const BITS_EXTRACT = (value,begin,size) => ((value >> begin) & (1 << ((begin+size)-begin))-1);
 
 function setupRegisters() {
 	return {
@@ -268,6 +280,10 @@ class VirtualMachine extends EventEmitter {
 		this.cpu.cores[this.cpu.currentCore].regs.ip[0] = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]);
 		
 		/* Decodes the instruction */
+		var instr_opcode = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],40,8);
+		var instr_addrmode = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],48,8);
+		var instr_flags = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],56,8);
+		
 		var addr = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+1);
 		var val = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+2);
 		
@@ -275,167 +291,318 @@ class VirtualMachine extends EventEmitter {
 		
 		/* Execute the instruction */
 		try {
-			switch(this.cpu.cores[this.cpu.currentCore].regs.ip[0]) {
+			switch(instr_opcode) {
 				case 0: /* NOP */
-					this.stop();
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) this.stop();
+					else this.intr(CPU_INT["BADPERM"]);
 					break;
-				case 1: /* ADDR */
-					this.regwrite(addr,this.regread(addr)+this.regread(val));
-					break;
-				case 2: /* ADDM */
-					this.write(addr,this.read(addr)+this.read(val));
-					break;
-				case 3: /* SUBR */
-					this.regwrite(addr,this.regread(addr)-this.regread(val));
-					break;
-				case 4: /* SUBM */
-					this.write(addr,this.read(addr)-this.read(val));
-					break;
-				case 5: /* MULR */
-					this.regwrite(addr,this.regread(addr)*this.regread(val));
-					break;
-				case 6: /* MULM */
-					this.write(addr,this.read(addr)*this.read(val));
-					break;
-				case 7: /* DIVR */
-					if(this.regread(val) == 0) {
-						this.intr(CPU_INT["DIVBYZERO"]);
-						break;
+				case 1: /* ADD */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr)+this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr)+this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
 					}
-					this.regwrite(addr,this.regread(addr)/this.regread(val));
 					break;
-				case 8: /* DIVM */
-					if(this.read(val) == 0) {
-						this.intr(CPU_INT["DIVBYZERO"]);
-						break;
+				case 2: /* SUBR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr)-this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr)-this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
 					}
-					this.write(addr,this.read(addr)/this.read(val));
 					break;
-				case 9: /* ANDR */
-					this.regwrite(addr,this.regread(addr) & this.regread(val));
+				case 3: /* MULR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr)*this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr)*this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 10: /* ANDM */
-					this.write(addr,this.read(addr) & this.read(val));
+				case 4: /* DIVR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							if(this.regread(val) == 0) {
+								this.intr(CPU_INT["DIVBYZERO"]);
+								break;
+							}
+							this.regwrite(addr,this.regread(addr)/this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							if(this.read(val) == 0) {
+								this.intr(CPU_INT["DIVBYZERO"]);
+								break;
+							}
+							this.write(addr,this.read(addr)/this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 11: /* ORR */
-					this.regwrite(addr,this.regread(addr) | this.regread(val));
+				case 5: /* ANDR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr) & this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr) & this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 12: /* ORM */
-					this.write(addr,this.read(addr) | this.read(val));
+				case 6: /* ORR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr) | this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr) | this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 13: /* XORR */
-					this.regwrite(addr,this.regread(addr) ^ this.regread(val));
+				case 7: /* XORR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr) ^ this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr) ^ this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 14: /* XORM */
-					this.write(addr,this.read(addr) ^ this.read(val));
+				case 8: /* NORR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,~(this.regread(addr) | this.regread(val)));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,~(this.read(addr) | this.read(val)));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 15: /* NORR */
-					this.regwrite(addr,~(this.regread(addr) | this.regread(val)));
+				case 9: /* NANDR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,~(this.regread(addr) & this.regread(val)));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,~(this.read(addr) & this.read(val)));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 16: /* NORM */
-					this.write(addr,~(this.read(addr) | this.read(val)));
+				case 10: /* MOD */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr) % this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr) % this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 17: /* NANDR */
-					this.regwrite(addr,~(this.regread(addr) & this.regread(val)));
+				case 11: /* LSHIFT */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr) << this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr) << this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 18: /* NANDM */
-					this.write(addr,~(this.read(addr) & this.read(val)));
+				case 12: /* RSHIFT */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(addr) >> this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(addr) >> this.read(val));
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 19: /* LSHIFTR */
-					this.regwrite(addr,this.regread(addr) << this.regread(val));
+				case 13: /* CMP */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) == this.regread(val);
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) == this.read(val);
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 20: /* LSHIFTM */
-					this.write(addr,this.read(addr) << this.read(val));
+				case 14: /* GRTN */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) > this.regread(val);
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) > this.read(val);
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 21: /* RSHIFTR */
-					this.regwrite(addr,this.regread(addr) >> this.regread(val));
+				case 15: /* LSTN */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) < this.regread(val);
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) < this.read(val);
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 22: /* RSHIFTM */
-					this.write(addr,this.read(addr) >> this.read(val));
+				case 16: /* JIT */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 23: /* CMPR */
-					this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) == this.regread(val);
+				/* Memory Instructions */
+				case 17: /* JMPR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 24: /* CMPM */
-					this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) == this.read(val);
-					break;
-				case 25: /* JITR */
-					if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
-					break;
-				case 26: /* JITM */
-					if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
-					break;
-				case 27: /* JIT */
-					if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
-					break;
-				case 28: /* JMPR */
-					this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
-					break;
-				case 29: /* JMPM */
-					this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
-					break;
-				case 30: /* JMP */
-					this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
-					break;
-				case 31: /* CALLR */
+				case 18: /* CALLR */
 					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
 						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
-						this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
+						switch(instr_addrmode) {
+							case INSTR_ADDRMODE["REG"]:
+								this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
+								break;
+							case INSTR_ADDRMODE["ADDR"]:
+								this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+								break;
+							default: this.intr(CPU_INT["BADADDR"]);
+								break;
+						}
 					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
-				case 32: /* CALLM */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
-						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
-						this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
-					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
-					break;
-				case 33: /* CALL */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
-						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
-						this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
-					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
-					break;
-				case 34: /* RET */
+				case 19: /* RET */
 					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--];
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
-				case 35: /* PUSHR */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.regread(addr);
-					else this.intr(CPU_INT["STACK_OVERFLOW"]);
+				case 20: /* PUSHR */
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
+						switch(instr_addrmode) {
+							case INSTR_ADDRMODE["REG"]:
+								this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.regread(addr);
+								break;
+							case INSTR_ADDRMODE["ADDR"]:
+								this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.read(addr);
+								break;
+							default: this.intr(CPU_INT["BADADDR"]);
+								break;
+						}
+					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
-				case 36: /* PUSHM */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.read(addr);
-					else this.intr(CPU_INT["STACK_OVERFLOW"]);
+				case 21: /* POPR */
+					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
+						switch(instr_addrmode) {
+							case INSTR_ADDRMODE["REG"]:
+								this.regwrite(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
+								break;
+							case INSTR_ADDRMODE["ADDR"]:
+								this.write(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
+								break;
+							default: this.intr(CPU_INT["BADADDR"]);
+								break;
+						}
+					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
-				case 37: /* POPR */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.regwrite(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
-					else this.intr(CPU_INT["STACK_OVERFLOW"]);
+				case 22: /* MOVR */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.regwrite(addr,this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.regwrite(addr,this.read(val));
+							break;
+						case INSTR_ADDRMODE["RAW"]:
+							this.regwrite(addr,val);
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 38: /* POPM */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.write(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
-					else this.intr(CPU_INT["STACK_OVERFLOW"]);
+				case 23: /* MOVM */
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							this.write(addr,this.regread(val));
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							this.write(addr,this.read(val));
+							break;
+						case INSTR_ADDRMODE["RAW"]:
+							this.write(addr,val);
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
 					break;
-				case 39: /* MOVRR */
-					this.regwrite(addr,this.regread(val));
-					break;
-				case 40: /* MOVRM */
-					this.write(addr,this.regread(val));
-					break;
-				case 41: /* MOVMR */
-					this.regwrite(addr,this.read(val));
-					break;
-				case 42: /* MOVMM */
-					this.write(addr,this.read(val));
-					break;
-				case 43: /* STOR */
-					this.regwrite(addr,val);
-					break;
-				case 44: /* STOM */
-					this.write(addr,val);
-					break;
-				case 45: /* INTR */
+				/* Interupt Instructions */
+				case 24: /* INT */
 					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						var a = this.regread(addr);
+						var a;
+						switch(instr_addrmode) {
+							case INSTR_ADDRMODE["REG"]:
+								a = this.regread(val);
+								break;
+							case INSTR_ADDRMODE["ADDR"]:
+								a = this.read(val);
+								break;
+							case INSTR_ADDRMODE["RAW"]:
+								a = val;
+								break;
+							default: this.intr(CPU_INT["BADADDR"]);
+								break;
+						}
 						try {
 							this.intr(a);
 						} catch(ex) {
@@ -443,48 +610,30 @@ class VirtualMachine extends EventEmitter {
 						}
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
-				case 46: /* INTM */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						var a = this.read(addr);
-						try {
-							this.intr(a);
-						} catch(ex) {
-							this.intr(CPU_INT["BADADDR"]);
-						}
-					} else this.intr(CPU_INT["BADPERM"]);
-					break;
-				case 47: /* INT */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						try {
-							this.intr(addr);
-						} catch(ex) {
-							this.intr(CPU_INT["BADADDR"]);
-						}
-					} else this.intr(CPU_INT["BADPERM"]);
-					break;
-				case 48: /* IRET */
+				case 25: /* IRET */
 					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.cores[this.cpu.currentCore].regs = this.cpu.cores[this.cpu.currentCore].iregs;
 						else this.intr(CPU_INT["FAULT"]);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
-				case 49: /* LDITBLR */
+				case 26: /* LDITBL */
 					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						addr = this.regread(addr);
+						switch(instr_addrmode) {
+							case INSTR_ADDRMODE["REG"]:
+								addr = this.regread(addr);
+								break;
+							case INSTR_ADDRMODE["ADDR"]:
+								addr = this.read(addr);
+								break;
+							case INSTR_ADDRMODE["RAW"]:
+								break;
+							default: this.intr(CPU_INT["BADADDR"]);
+								break;
+						}
 						for(var i = 0;i < this.cpu.cores[this.cpu.currentCore].ivt.length;i++) this.cpu.cores[this.cpu.currentCore].ivt[i] = this.read(addr+i);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
-				case 50: /* LDITBLM */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						addr = this.read(addr);
-						for(var i = 0;i < this.cpu.cores[this.cpu.currentCore].ivt.length;i++) this.cpu.cores[this.cpu.currentCore].ivt[i] = this.read(addr+i);
-					} else this.intr(CPU_INT["BADPERM"]);
-					break;
-				case 51: /* HLT */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) this.stop();
-					else this.intr(CPU_INT["BADPERM"]);
-					break;
-				case 52: /* RST */
+				case 27: /* RST */
 					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						this.stop();
 						this.reset();
