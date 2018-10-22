@@ -1,6 +1,7 @@
 const jints = require("jints");
 const Lexer = require("./lexer.js");
 const vm = require("vm");
+const _ = require("struct-fu");
 
 const REGISTERS = (() => {
 	var r = ["flags","tmp","sp","ip","pc","cycle"];
@@ -10,6 +11,54 @@ const REGISTERS = (() => {
 	}
 	return r;
 })();
+
+const INSTR = _.struct([
+	_.struct("instr"[
+		_.byte("unused",40),
+		_.uint8("opcode"),
+		_.uint8("addrmode"),
+		_.uint8("flags")
+	]),
+	_.float64("address"),
+	_.float64("data")
+]);
+
+const INSTR_ADDRMODE = {
+	"DEFAULT": 0,
+	"REG": 0,
+	"ADDR": 1,
+	"RAW": 2
+};
+
+const INSTR_SIZES = {
+	"nop": 0,
+	"add": 2,
+	"sub": 2,
+	"mul": 2,
+	"div": 2,
+	"and": 2,
+	"or": 2,
+	"xor": 2,
+	"nor": 2,
+	"nand": 2,
+	"mod": 2,
+	"lshift": 2,
+	"rshift": 2,
+	"cmp": 2,
+	"grtn": 2,
+	"lstn": 2,
+	"jit": 1,
+	"jmp": 1,
+	"call": 1,
+	"ret": 1,
+	"push": 1,
+	"pop": 1,
+	"mov": 2,
+	"int": 1,
+	"iret": 1,
+	"lditbl": 1,
+	"rst": 0
+};
 
 class Token {
 	constructor(type) {
@@ -50,216 +99,139 @@ class TokenInstruction extends Token {
 	compileAddress(token) {
 		return parseInt(token.image.replace("$0x",""),16);
 	}
+	compileChar(token) {
+		var sb = { result: token.image.slice(1,-1) };
+		vm.runInNewContext("result = "+this.tokens[3].image+";",sb,"assembler.js");
+		return Buffer.from(sb.result)[0];
+	}
 	compileRegister(token) {
 		var str = token.image.replace("%","");
 		if(REGISTERS.indexOf(str) == -1) throw new Error(str+" is not a register");
 		return REGISTERS.indexOf(str);
 	}
-	compileRRMM(a,b) {
-		if(this.tokens[1].tokenType != this.tokens[3].tokenType != Lexer.TOKEN_BASE.register) throw new Error("Address and value parameters must be the same");
-		if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-			instr[0] = a;
-			instr[1] = this.compileRegister(this.tokens[1]);
-			instr[2] = this.compileRegister(this.tokens[3]);
-		} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-			instr[0] = b;
-			instr[1] = this.compileAddress(this.tokens[1]);
-			instr[2] = this.compileAddress(this.tokens[3]);
-		} else throw new Error("Invalid parameter types");
-	}
 	compileFN(parser,token) {
 		return 0xA0000000+parser.findFunctionOffset(token.image);
 	}
+	compileParam(parser,token) {
+		if(token.tokenType == Lexer.TOKEN_BASE.register) return this.compileRegister(token);
+		if(token.tokenType == Lexer.TOKEN_BASE.identifier) return this.compileFN(parser,token);
+		if(token.tokenType == Lexer.TOKEN_BASE.address) return this.compileAddress(token);
+		if(token.tokenType == Lexer.TOKEN_BASE.integer) {
+			if(token.image.slice(0,2) == "0b") return parseInt(token.image.replace("0b",""),2);
+			if(token.image.slice(0,2) == "0x") return parseInt(token.image.replace("0x",""),16);
+			return parseInt(token.image);
+		}
+	}
 	compile(parser) {
-		var instr = [0,0,0];
+		var opcodes = {
+			instr: {
+				opcode: 0,
+				addrmode: 0,
+				flags: 0
+			},
+			address: 0,
+			value: 0
+		};
+		
+		if(this.tokens.length >= 2) {
+			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes.instr.addrmode = INSTR_ADDRMODE["REG"];
+			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) opcodes.instr.addrmode = INSTR_ADDRMODE["ADDR"];
+			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.char) opcodes.instr.addrmode = INSTR_ADDRMODE["RAW"];
+			
+			opcodes.address = this.compileParam(this.tokens[1]);
+		}
+		
+		if(this.tokens.length == 4) opcodes.value = this.compileParam(this.tokens[3]);
 		
 		switch(this.name) {
 			case "nop":
-				instr[0] = 0;
+				opcodes.instr.opcode = 0;
 				break;
 			case "add":
-				this.compileRRMM(1,2);
+				opcodes.instr.opcode = 1;
 				break;
 			case "sub":
-				this.compileRRMM(3,4);
+				opcodes.instr.opcode = 2;
 				break;
 			case "mul":
-				this.compileRRMM(5,6);
+				opcodes.instr.opcode = 3;
 				break;
 			case "div":
-				this.compileRRMM(7,8);
+				opcodes.instr.opcode = 4;
 				break;
 			case "and":
-				this.compileRRMM(9,10);
+				opcodes.instr.opcode = 5;
 				break;
 			case "or":
-				this.compileRRMM(11,12);
+				opcodes.instr.opcode = 6;
 				break;
 			case "xor":
-				this.compileRRMM(13,14);
+				opcodes.instr.opcode = 7;
 				break;
 			case "nor":
-				this.compileRRMM(15,16);
+				opcodes.instr.opcode = 8;
 				break;
 			case "nand":
-				this.compileRRMM(17,18);
+				opcodes.instr.opcode = 9;
+				break;
+			case "mod":
+				opcodes.instr.opcode = 10;
 				break;
 			case "lshift":
-				this.compileRRMM(19,20);
+				opcodes.instr.opcode = 11;
 				break;
 			case "rshift":
-				this.compileRRMM(21,22);
+				opcodes.instr.opcode = 12;
 				break;
 			case "cmp":
-				this.compileRRMM(23,24);
+				opcodes.instr.opcode = 13;
+				break;
+			case "grtn":
+				opcodes.instr.opcode = 14;
+				break;
+			case "lstn":
+				opcodes.instr.opcode = 15;
 				break;
 			case "jit":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 25;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 26;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer) {
-					instr[0] = 27;
-					instr[1] = parseInt(this.tokens[1].image);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) {
-					instr[0] = 27;
-					instr[1] = this.compileFN(parser,this.tokens[1]);
-				} else throw new Error("Invalid address parameter");
+				opcodes.instr.opcode = 16;
 				break;
 			case "jmp":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 28;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 29;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer) {
-					instr[0] = 30;
-					instr[1] = parseInt(this.tokens[1].image);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) {
-					instr[0] = 30;
-					instr[1] = this.compileFN(parser,this.tokens[1]);
-				} else throw new Error("Invalid address parameter");
+				opcodes.instr.opcode = 17;
 				break;
 			case "call":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 31;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 32;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer) {
-					instr[0] = 33;
-					instr[1] = parseInt(this.tokens[1].image);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) {
-					instr[0] = 33;
-					instr[1] = this.compileFN(parser,this.tokens[1]);
-				} else throw new Error("Invalid address parameter");
+				opcodes.instr.opcode = 18;
 				break;
 			case "ret":
-				instr[0] = 34;
+				opcodes.instr.opcode = 19;
 				break;
 			case "push":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 35;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 36;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else throw new Error("Invalid address parameter");
+				opcodes.instr.opcode = 20;
 				break;
 			case "pop":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 37;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 38;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else throw new Error("Invalid address parameter");
+				opcodes.instr.opcode = 21;
 				break;
 			case "mov":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register && this.tokens[3].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 39;
-					instr[1] = this.compileRegister(this.tokens[1]);
-					instr[2] = this.compileRegister(this.tokens[3]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register && this.tokens[3].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 40;
-					instr[1] = this.compileRegister(this.tokens[1]);
-					instr[2] = this.compileAddress(this.tokens[3]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address && this.tokens[3].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 41;
-					instr[1] = this.compileAddress(this.tokens[1]);
-					instr[2] = this.compileRegister(this.tokens[3]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address && this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 42;
-					instr[1] = this.compileAddress(this.tokens[1]);
-					instr[2] = this.compileAddress(this.tokens[3]);
-				} else throw new Error("Invalid parameters");
-				break;
-			case "sto":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 43;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 44;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else throw new Error("Invalid address parameter");
-				
-				if(this.tokens[3].tokenType == Lexer.TOKEN_BASE.integer) {
-					instr[2] = parseInt(this.tokens[3].image);
-				} else if(this.tokens[3].tokenType == Lexer.TOKEN_BASE.identifier) {
-					instr[2] = this.compileFN(parser,this.tokens[1]);
-				} else if(this.tokens[3].tokenType == Lexer.TOKEN_BASE.char) {
-					var sb = { result: this.tokens[3].image.slice(1,-1) };
-					vm.runInNewContext("result = "+this.tokens[3].image+";",sb,"assembler.js");
-					instr[2] = Buffer.from(sb.result)[0];
-				} else throw new Error("Invalid data parameter");
+				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes.instr.opcode = 22;
+				else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address || this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) opcodes.instr.opcode = 23;
+				else throw new Error("Address parameter is not a register or memory address");
 				break;
 			case "int":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 45;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 46;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer) {
-					instr[0] = 47;
-					instr[1] = parseInt(this.tokens[1].image);
-				} else throw new Error("Invalid address parameter");
+				opcodes.instr.opcode = 24;
 				break;
 			case "iret":
-				instr[0] = 48;
+				opcodes.instr.opcode = 25;
 				break;
 			case "lditbl":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) {
-					instr[0] = 49;
-					instr[1] = this.compileRegister(this.tokens[1]);
-				} else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) {
-					instr[0] = 50;
-					instr[1] = this.compileAddress(this.tokens[1]);
-				} else throw new Error("Invalid address parameter");
-				break;
-			case "hlt":
-				instr[0] = 51;
+				opcodes.instr.opcode = 26;
 				break;
 			case "rst":
-				instr[0] = 52;
+				opcodes.instr.opcode = 27;
 				break;
 			default: throw new Error("Invalid instruction");
 		}
-		
-		for(var i = 0;i < instr.length;i++) {
-			if(!(instr[i] instanceof jints.UInt64)) instr[i] = new jints.UInt64(instr[i]);
-		}
-		for(var i = 0;i < instr.length;i++) instr[i] = instr[i].toArray();
-		var buff = Buffer.alloc(8*3);
-		var index = 0;
-		for(var i = 0;i < instr.length;i++) {
-			for(var x = 0;x < 8;x++) buff[index++] = instr[i][x];
-		}
-		return buff;
+		return INSTR.pack(opcodes);
 	}
 }
 
@@ -308,32 +280,6 @@ class Parser {
 	}
 	parseToken(token,lexerResult,index) {
 		try {
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.nop) return new TokenInstruction([token]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.add) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.sub) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.mul) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.div) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.and) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.or) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.xor) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.nor) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.nand) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.lshift) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.rshift) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.cmp) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.jit) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.jmp) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.call) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.ret) return new TokenInstruction([token]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.push) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.pop) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.mov) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.sto) return new TokenInstruction([token,lexerResult.tokens[index+1],lexerResult.tokens[index+2],lexerResult.tokens[index+3]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.int) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.iret) return new TokenInstruction([token]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.lditbl) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.hlt) return new TokenInstruction([token]);
-			if(token.tokenType == Lexer.TOKEN_INSTRUCTIONS.rst) return new TokenInstruction([token,lexerResult.tokens[index+1]]);
 			if(token.tokenType == Lexer.TOKEN_BASE.fn) {
 				var end = lexerResult.tokens.length;
 				for(var i = index+1;i < lexerResult.tokens.length;i++) {
@@ -351,6 +297,10 @@ class Parser {
 				}
 				if(this.findFunction(token.image.replace(":","")) != null) throw new Error("Function already exists");
 				return new TokenFunction(token,tokens);
+			} else {
+				var size = INSTR_SIZES[token.image.length]+1;
+				var tokens = lexerResult.tokens.slice(index,index+size);
+				return new TokenInstruction(tokens);
 			}
 		} catch(ex) {
 			this.errors.push(ex);

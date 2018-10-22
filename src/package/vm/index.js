@@ -308,7 +308,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 2: /* SUBR */
+				case 2: /* SUB */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.regwrite(addr,this.regread(addr)-this.regread(val));
@@ -320,7 +320,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 3: /* MULR */
+				case 3: /* MUL */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.regwrite(addr,this.regread(addr)*this.regread(val));
@@ -332,7 +332,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 4: /* DIVR */
+				case 4: /* DIV */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							if(this.regread(val) == 0) {
@@ -352,7 +352,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 5: /* ANDR */
+				case 5: /* AND */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.regwrite(addr,this.regread(addr) & this.regread(val));
@@ -364,7 +364,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 6: /* ORR */
+				case 6: /* OR */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.regwrite(addr,this.regread(addr) | this.regread(val));
@@ -376,7 +376,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 7: /* XORR */
+				case 7: /* XOR */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.regwrite(addr,this.regread(addr) ^ this.regread(val));
@@ -388,7 +388,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 8: /* NORR */
+				case 8: /* NOR */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.regwrite(addr,~(this.regread(addr) | this.regread(val)));
@@ -400,7 +400,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 9: /* NANDR */
+				case 9: /* NAND */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.regwrite(addr,~(this.regread(addr) & this.regread(val)));
@@ -497,7 +497,7 @@ class VirtualMachine extends EventEmitter {
 					}
 					break;
 				/* Memory Instructions */
-				case 17: /* JMPR */
+				case 17: /* JMP */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
 							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
@@ -509,7 +509,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
-				case 18: /* CALLR */
+				case 18: /* CALL */
 					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
 						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
 						switch(instr_addrmode) {
@@ -528,7 +528,7 @@ class VirtualMachine extends EventEmitter {
 					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--];
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
-				case 20: /* PUSHR */
+				case 20: /* PUSH */
 					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
 						switch(instr_addrmode) {
 							case INSTR_ADDRMODE["REG"]:
@@ -542,7 +542,7 @@ class VirtualMachine extends EventEmitter {
 						}
 					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
-				case 21: /* POPR */
+				case 21: /* POP */
 					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
 						switch(instr_addrmode) {
 							case INSTR_ADDRMODE["REG"]:

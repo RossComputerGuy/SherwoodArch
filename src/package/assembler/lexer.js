@@ -13,9 +13,12 @@ const TOKEN_INSTRUCTIONS = {
 	"xor": createToken({ name: "xor", pattern: /xor/ }),
 	"nor": createToken({ name: "nor", pattern: /nor/ }),
 	"nand": createToken({ name: "nand", pattern: /nand/ }),
+	"mod": createToken({ name: "mod", pattern: /mod/ }),
 	"lshift": createToken({ name: "lshift", pattern: /lshift/ }),
 	"rshift": createToken({ name: "rshift", pattern: /rshift/ }),
 	"cmp": createToken({ name: "cmp", pattern: /cmp/ }),
+	"grtn": createToken({ name: "grtn", pattern: /grtn/ }),
+	"lstn": createToken({ name: "grtn", pattern: /lstn/ }),
 	"jit": createToken({ name: "jit", pattern: /jit/ }),
 	"jmp": createToken({ name: "jmp", pattern: /jmp/ }),
 	"call": createToken({ name: "call", pattern: /call/ }),
@@ -23,11 +26,9 @@ const TOKEN_INSTRUCTIONS = {
 	"push": createToken({ name: "push", pattern: /push/ }),
 	"pop": createToken({ name: "pop", pattern: /pop/ }),
 	"mov": createToken({ name: "mov", pattern: /mov/ }),
-	"sto": createToken({ name: "sto", pattern: /sto/ }),
 	"int": createToken({ name: "int", pattern: /int/ }),
 	"iret": createToken({ name: "iret", pattern: /iret/ }),
 	"lditbl": createToken({ name: "lditbl", pattern: /lditbl/ }),
-	"hlt": createToken({ name: "hlt", pattern: /hlt/ }),
 	"rst": createToken({ name: "rst", pattern: /rst/ })
 };
 
