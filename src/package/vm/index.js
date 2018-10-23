@@ -295,7 +295,10 @@ class VirtualMachine extends EventEmitter {
 		try {
 			switch(instr_opcode) {
 				case 0: /* NOP */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) this.cpu.cores[this.cpu.currentCore].running = false;
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						this.cpu.cores[this.cpu.currentCore].running = false;
+						if(this.cpu.currentCore == 0) this.stop();
+					}
 					else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 1: /* ADD */
@@ -647,6 +650,7 @@ class VirtualMachine extends EventEmitter {
 					break;
 				case 27: /* RST */
 					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+						for(var i = 0;i < this.cpu.cores.length;i++) this.cpu.cores[i].running = false;
 						this.stop();
 						this.reset();
 						this.start();
