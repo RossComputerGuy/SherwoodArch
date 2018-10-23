@@ -46,6 +46,8 @@ static struct argp argp = { options, parse_opt, args_doc, doc };
 int main(int argc,char** argv) {
 	struct arguments arguments;
 	arguments.clockspeed = 1;
+	arguments.ram = NULL;
+	arguments.firmware = NULL;
 	
 	argp_parse(&argp,argc,argv,0,0,&arguments);
 	

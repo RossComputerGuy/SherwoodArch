@@ -289,11 +289,13 @@ class VirtualMachine extends EventEmitter {
 		
 		this.cpu.cores[this.cpu.currentCore].regs.pc[0] += 3;
 		
+		//console.log(instr_opcode,instr_addrmode,instr_flags,addr,val);
+		
 		/* Execute the instruction */
 		try {
 			switch(instr_opcode) {
 				case 0: /* NOP */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) this.stop();
+					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) this.cpu.cores[this.cpu.currentCore].running = false;
 					else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 1: /* ADD */
