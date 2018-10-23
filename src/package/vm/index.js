@@ -728,9 +728,12 @@ class VirtualMachine extends EventEmitter {
 	}
 	isMapped(addr) {
 		for(var entry of this.ioctl.mmap) {
-			if(entry.addr <= addr && entry.end > addr) return true;
+			if(this.isMappedAt(addr,entry)) return true;
 		}
 		return false;
+	}
+	isMappedAt(addr,entry) {
+		return entry.addr <= addr && entry.end > addr;
 	}
 	read(addr) {
 		this.emit("ioctl/read",addr);
@@ -745,9 +748,9 @@ class VirtualMachine extends EventEmitter {
 			}
 		}
 		for(var entry of this.ioctl.mmap) {
-			if(entry.addr <= addr && entry.end > addr) return entry.read(addr-entry.addr);
+			if(this.isMappedAt(addr,entry)) return entry.read(addr-entry.addr);
 		}
-		throw new Error("SAVM_ERROR_NOTMAPPED");
+		throw new Error("SAVM_ERROR_NOTMAPPED: 0x"+addr.toString(16));
 	}
 	write(addr,v) {
 		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING) {
@@ -761,7 +764,7 @@ class VirtualMachine extends EventEmitter {
 			}
 		}
 		for(var entry of this.ioctl.mmap) {
-			if(entry.addr <= addr && entry.end > addr) {
+			if(this.isMappedAt(addr,entry)) {
 				entry.write(addr-entry.addr,v);
 				return this.emit("ioctl/write",addr,v);
 			}

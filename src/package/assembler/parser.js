@@ -116,11 +116,11 @@ class TokenInstruction extends Token {
 		var opcodes = [0,0,0];
 		
 		if(this.tokens.length >= 2) {
-			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (INSTR_ADDRMODE["REG"] << 56);
+			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (INSTR_ADDRMODE["REG"] << 48);
 			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier
-				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) opcodes[0] |= (INSTR_ADDRMODE["ADDR"] << 56);
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) opcodes[0] |= (INSTR_ADDRMODE["ADDR"] << 48);
 			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer
-				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.char) opcodes[0] |= (INSTR_ADDRMODE["RAW"] << 56);
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.char) opcodes[0] |= (INSTR_ADDRMODE["RAW"] << 48);
 			
 			opcodes[1] = this.compileParam(parser,this.tokens[1]);
 		}
@@ -129,87 +129,92 @@ class TokenInstruction extends Token {
 		
 		switch(this.name) {
 			case "nop":
-				opcodes[0] |= (0 << 48);
+				opcodes[0] |= (0 << 40);
 				break;
 			case "add":
-				opcodes[0] |= (1 << 48);
+				opcodes[0] |= (1 << 40);
 				break;
 			case "sub":
-				opcodes[0] |= (2 << 48);
+				opcodes[0] |= (2 << 40);
 				break;
 			case "mul":
-				opcodes[0] |= (3 << 48);
+				opcodes[0] |= (3 << 40);
 				break;
 			case "div":
-				opcodes[0] |= (4 << 48);
+				opcodes[0] |= (4 << 40);
 				break;
 			case "and":
-				opcodes[0] |= (5 << 48);
+				opcodes[0] |= (5 << 40);
 				break;
 			case "or":
-				opcodes[0] |= (6 << 48);
+				opcodes[0] |= (6 << 40);
 				break;
 			case "xor":
-				opcodes[0] |= (7 << 48);
+				opcodes[0] |= (7 << 40);
 				break;
 			case "nor":
-				opcodes[0] |= (8 << 48);
+				opcodes[0] |= (8 << 40);
 				break;
 			case "nand":
-				opcodes[0] |= (9 << 48);
+				opcodes[0] |= (9 << 40);
 				break;
 			case "mod":
-				opcodes[0] |= (10 << 48);
+				opcodes[0] |= (10 << 40);
 				break;
 			case "lshift":
-				opcodes[0] |= (11 << 48);
+				opcodes[0] |= (11 << 40);
 				break;
 			case "rshift":
-				opcodes[0] |= (12 << 48);
+				opcodes[0] |= (12 << 40);
 				break;
 			case "cmp":
-				opcodes[0] |= (13 << 48);
+				opcodes[0] |= (13 << 40);
 				break;
 			case "grtn":
-				opcodes[0] |= (14 << 48);
+				opcodes[0] |= (14 << 40);
 				break;
 			case "lstn":
-				opcodes[0] |= (15 << 48);
+				opcodes[0] |= (15 << 40);
 				break;
 			case "jit":
-				opcodes[0] |= (16 << 48);
+				opcodes[0] |= (16 << 40);
 				break;
 			case "jmp":
-				opcodes[0] |= (17 << 48);
+				opcodes[0] |= (17 << 40);
 				break;
 			case "call":
-				opcodes[0] |= (18 << 48);
+				opcodes[0] |= (18 << 40);
 				break;
 			case "ret":
-				opcodes[0] |= (19 << 48);
+				opcodes[0] |= (19 << 40);
 				break;
 			case "push":
-				opcodes[0] |= (20 << 48);
+				opcodes[0] |= (20 << 40);
 				break;
 			case "pop":
-				opcodes[0] |= (21 << 48);
+				opcodes[0] |= (21 << 40);
 				break;
 			case "mov":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (22 << 48);
-				else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address || this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) opcodes[0] |= (23 << 48);
+				if(this.tokens[3].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (INSTR_ADDRMODE["REG"] << 48);
+				if(this.tokens[3].tokenType == Lexer.TOKEN_BASE.identifier
+					|| this.tokens[3].tokenType == Lexer.TOKEN_BASE.address) opcodes[0] |= (INSTR_ADDRMODE["ADDR"] << 48);
+				if(this.tokens[3].tokenType == Lexer.TOKEN_BASE.integer
+					|| this.tokens[3].tokenType == Lexer.TOKEN_BASE.char) opcodes[0] |= (INSTR_ADDRMODE["RAW"] << 48);
+				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (22 << 40);
+				else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address || this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) opcodes[0] |= (23 << 40);
 				else throw new Error("Address parameter is not a register or memory address");
 				break;
 			case "int":
-				opcodes[0] |= (24 << 48);
+				opcodes[0] |= (24 << 40);
 				break;
 			case "iret":
-				opcodes[0] |= (25 << 48);
+				opcodes[0] |= (25 << 40);
 				break;
 			case "lditbl":
-				opcodes[0] |= (26 << 48);
+				opcodes[0] |= (26 << 40);
 				break;
 			case "rst":
-				opcodes[0] |= (27 << 48);
+				opcodes[0] |= (27 << 40);
 				break;
 			default: throw new Error("Invalid instruction");
 		}
