@@ -284,12 +284,12 @@ class VirtualMachine extends EventEmitter {
 		var instr_addrmode = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],48,8);
 		var instr_flags = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],56,8);
 		
+		if(instr_addrmode == 3) instr_addrmode = 2;
+		
 		var addr = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+1);
 		var val = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+2);
 		
 		this.cpu.cores[this.cpu.currentCore].regs.pc[0] += 3;
-		
-		//console.log(instr_opcode,instr_addrmode,instr_flags,addr,val);
 		
 		/* Execute the instruction */
 		try {

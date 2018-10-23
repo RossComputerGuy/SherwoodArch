@@ -221,6 +221,8 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 	uint8_t instr_addrmode = SAVM_BITS_EXTRACT(vm->cpu.cores[vm->cpu.currentCore].regs.ip,48,8);
 	uint8_t instr_flags = SAVM_BITS_EXTRACT(vm->cpu.cores[vm->cpu.currentCore].regs.ip,56,8);
 	
+	if(instr_addrmode == 3) instr_addrmode = 2;
+	
 	uint64_t addr;
 	uint64_t val;
 	
