@@ -117,10 +117,10 @@ class TokenInstruction extends Token {
 		
 		if(this.tokens.length >= 2) {
 			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (INSTR_ADDRMODE["REG"] << 48);
-			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier
-				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) opcodes[0] |= (INSTR_ADDRMODE["ADDR"] << 48);
+			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) opcodes[0] |= (INSTR_ADDRMODE["ADDR"] << 48);
 			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer
-				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.char) opcodes[0] |= (INSTR_ADDRMODE["RAW"] << 48);
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.char
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) opcodes[0] |= (INSTR_ADDRMODE["RAW"] << 48);
 			
 			opcodes[1] = this.compileParam(parser,this.tokens[1]);
 		}
