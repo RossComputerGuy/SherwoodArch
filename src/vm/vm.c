@@ -221,8 +221,6 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 	uint8_t instr_addrmode = SAVM_BITS_EXTRACT(vm->cpu.cores[vm->cpu.currentCore].regs.ip,48,8);
 	uint8_t instr_flags = SAVM_BITS_EXTRACT(vm->cpu.cores[vm->cpu.currentCore].regs.ip,56,8);
 	
-	if(instr_addrmode == 3) instr_addrmode = 2;
-	
 	uint64_t addr;
 	uint64_t val;
 	
@@ -231,6 +229,8 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 	
 	err = savm_ioctl_read(vm,vm->cpu.cores[vm->cpu.currentCore].regs.pc+2,&val);
 	if(err != SAVM_ERROR_NONE) return err;
+	
+	printf("%d %d %d %d %d\n",instr_opcode,instr_addrmode,instr_flags,addr,val);
 	
 	vm->cpu.cores[vm->cpu.currentCore].regs.pc += 3;
 	
@@ -1796,7 +1796,7 @@ savm_error_e savm_ioctl_read(savm_t* vm,uint64_t addr,uint64_t* data) {
 	if(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_PAGING) {
 		for(uint64_t t = 0;t < vm->io.pgdir->tableCount;t++) {
 			for(uint64_t p = 0;p < vm->io.pgdir->tables[t].size;p++) {
-				if(vm->io.pgdir->tables[t].page[p].address <= addr && vm->io.pgdir->tables[t].page[p].address+vm->io.pgdir->tables[t].page[p].size > addr) {
+				if((vm->io.pgdir->tables[t].page[p].vaddress <= addr && vm->io.pgdir->tables[t].page[p].vaddress+vm->io.pgdir->tables[t].page[p].size > addr) || (vm->io.pgdir->tables[t].page[p].paddress <= addr && vm->io.pgdir->tables[t].page[p].paddress+vm->io.pgdir->tables[t].page[p].size > addr)) {
 					if(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN && !(vm->io.pgdir->tables[t].page[p].perms & SAVM_CPU_PAGING_PERM_KERN)) {
 						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 						if(err != SAVM_ERROR_NONE) return err;
@@ -1805,6 +1805,7 @@ savm_error_e savm_ioctl_read(savm_t* vm,uint64_t addr,uint64_t* data) {
 						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 						if(err != SAVM_ERROR_NONE) return err;
 					}
+					addr = vm->io.pgdir->tables[t].page[p].paddress;
 				}
 			}
 		}
@@ -1823,7 +1824,7 @@ savm_error_e savm_ioctl_write(savm_t* vm,uint64_t addr,uint64_t data) {
 	if(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_PAGING) {
 		for(uint64_t t = 0;t < vm->io.pgdir->tableCount;t++) {
 			for(uint64_t p = 0;p < vm->io.pgdir->tables[t].size;p++) {
-				if(vm->io.pgdir->tables[t].page[p].address <= addr && vm->io.pgdir->tables[t].page[p].address+vm->io.pgdir->tables[t].page[p].size > addr) {
+				if((vm->io.pgdir->tables[t].page[p].vaddress <= addr && vm->io.pgdir->tables[t].page[p].vaddress+vm->io.pgdir->tables[t].page[p].size > addr) || (vm->io.pgdir->tables[t].page[p].paddress <= addr && vm->io.pgdir->tables[t].page[p].paddress+vm->io.pgdir->tables[t].page[p].size > addr)) {
 					if(vm->cpu.cores[vm->cpu.currentCore].regs.flags & SAVM_CPU_REG_FLAG_PRIV_KERN && !(vm->io.pgdir->tables[t].page[p].perms & SAVM_CPU_PAGING_PERM_KERN)) {
 						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 						if(err != SAVM_ERROR_NONE) return err;
@@ -1832,6 +1833,7 @@ savm_error_e savm_ioctl_write(savm_t* vm,uint64_t addr,uint64_t data) {
 						savm_error_e err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 						if(err != SAVM_ERROR_NONE) return err;
 					}
+					addr = vm->io.pgdir->tables[t].page[p].paddress;
 				}
 			}
 		}
@@ -1878,9 +1880,10 @@ void savm_ioctl_ioctl_write(savm_t* vm,uint64_t i,uint64_t data) {
 					vm->io.pgdir->tables[i].page[x].perms = tmp >> 32;
 					
 					savm_ioctl_read(vm,data+1,&vm->io.pgdir->tables[i].page[x].size);
-					savm_ioctl_read(vm,data+2,&vm->io.pgdir->tables[i].page[x].address);
+					savm_ioctl_read(vm,data+2,&vm->io.pgdir->tables[i].page[x].paddress);
+					savm_ioctl_read(vm,data+3,&vm->io.pgdir->tables[i].page[x].vaddress);
 					
-					data += 3;
+					data += 4;
 				}
 				data += 1;
 			}

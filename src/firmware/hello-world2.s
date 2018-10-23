@@ -13,4 +13,4 @@ main:
 	mov $0x10000013,'d'
 	mov $0x10000013,'\r'
 	mov $0x10000013,'\n'
-	jmp main
+	rst

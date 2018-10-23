@@ -131,9 +131,10 @@ class VirtualMachine extends EventEmitter {
 							this.ioctl.pgdir.tables[i].page[x].flags = tmp & 0xffffffff;
 							this.ioctl.pgdir.tables[i].page[x].perms = tmp >> 32;
 							this.ioctl.pgdir.tables[i].page[x].size = this.read(addr+1);
-							this.ioctl.pgdir.tables[i].page[x].address = this.read(addr+2);
+							this.ioctl.pgdir.tables[i].page[x].paddress = this.read(addr+2);
+							this.ioctl.pgdir.tables[i].page[x].vaddress = this.read(addr+3);
 							
-							addr += 3;
+							addr += 4;
 						}
 						data += 1;
 					}
@@ -756,9 +757,10 @@ class VirtualMachine extends EventEmitter {
 		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING) {
 			for(var table of this.ioctl.pgdir.tables) {
 				for(var pg of table.entries) {
-					if(pg.address <= addr && pg.address+pg.size > addr) {
+					if(pg.vaddress <= addr && pg.vaddress+pg.size > addr) {
 						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
 						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
+						addr = pg.paddress;
 					}
 				}
 			}
@@ -772,9 +774,10 @@ class VirtualMachine extends EventEmitter {
 		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING) {
 			for(var table of this.ioctl.pgdir.tables) {
 				for(var pg of table.entries) {
-					if(pg.address <= addr && pg.address+pg.size > addr) {
+					if((pg.vaddress <= addr && pg.vaddress+pg.size > addr) || (pg.paddress <= addr && pg.paddress+pg.size > addr)) {
 						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_KERN && !(pg.perms & CPU_PAGING_PERM_KERN)) return this.intr(CPU_INT["BADPERM"]);
 						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER && !(pg.perms & CPU_PAGING_PERM_USER)) return this.intr(CPU_INT["BADPERM"]);
+						addr = pg.paddress;
 					}
 				}
 			}

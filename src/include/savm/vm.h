@@ -238,7 +238,8 @@ typedef struct {
 	uint32_t flags; /* Page flags */
 	uint32_t perms; /* Page permissions */
 	uint64_t size; /* Page size */
-	uint64_t address; /* Page address */
+	uint64_t paddress; /* Page physical address */
+	uint64_t vaddress; /* Page virtual address */
 } savm_page_t;
 
 typedef struct {
