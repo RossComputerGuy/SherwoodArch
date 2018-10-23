@@ -12,17 +12,6 @@ const REGISTERS = (() => {
 	return r;
 })();
 
-const INSTR = _.struct([
-	_.struct("instr"[
-		_.byte("unused",40),
-		_.uint8("opcode"),
-		_.uint8("addrmode"),
-		_.uint8("flags")
-	]),
-	_.float64("address"),
-	_.float64("data")
-]);
-
 const INSTR_ADDRMODE = {
 	"DEFAULT": 0,
 	"REG": 0,
@@ -32,28 +21,28 @@ const INSTR_ADDRMODE = {
 
 const INSTR_SIZES = {
 	"nop": 0,
-	"add": 2,
-	"sub": 2,
-	"mul": 2,
-	"div": 2,
-	"and": 2,
-	"or": 2,
-	"xor": 2,
-	"nor": 2,
-	"nand": 2,
-	"mod": 2,
-	"lshift": 2,
-	"rshift": 2,
-	"cmp": 2,
-	"grtn": 2,
-	"lstn": 2,
-	"jit": 1,
+	"add": 3,
+	"sub": 3,
+	"mul": 3,
+	"div": 3,
+	"and": 3,
+	"or": 3,
+	"xor": 3,
+	"nor": 3,
+	"nand": 3,
+	"mod": 3,
+	"lshift": 3,
+	"rshift": 3,
+	"cmp": 3,
+	"grtn": 3,
+	"lstn": 3,
+	"jit": 3,
 	"jmp": 1,
 	"call": 1,
-	"ret": 1,
+	"ret": 0,
 	"push": 1,
 	"pop": 1,
-	"mov": 2,
+	"mov": 3,
 	"int": 1,
 	"iret": 1,
 	"lditbl": 1,
@@ -116,6 +105,7 @@ class TokenInstruction extends Token {
 		if(token.tokenType == Lexer.TOKEN_BASE.register) return this.compileRegister(token);
 		if(token.tokenType == Lexer.TOKEN_BASE.identifier) return this.compileFN(parser,token);
 		if(token.tokenType == Lexer.TOKEN_BASE.address) return this.compileAddress(token);
+		if(token.tokenType == Lexer.TOKEN_BASE.char) return this.compileChar(token);
 		if(token.tokenType == Lexer.TOKEN_BASE.integer) {
 			if(token.image.slice(0,2) == "0b") return parseInt(token.image.replace("0b",""),2);
 			if(token.image.slice(0,2) == "0x") return parseInt(token.image.replace("0x",""),16);
@@ -123,115 +113,116 @@ class TokenInstruction extends Token {
 		}
 	}
 	compile(parser) {
-		var opcodes = {
-			instr: {
-				opcode: 0,
-				addrmode: 0,
-				flags: 0
-			},
-			address: 0,
-			value: 0
-		};
+		var opcodes = [0,0,0];
 		
 		if(this.tokens.length >= 2) {
-			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes.instr.addrmode = INSTR_ADDRMODE["REG"];
+			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (INSTR_ADDRMODE["REG"] << 56);
 			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier
-				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) opcodes.instr.addrmode = INSTR_ADDRMODE["ADDR"];
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.address) opcodes[0] |= (INSTR_ADDRMODE["ADDR"] << 56);
 			if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.integer
-				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.char) opcodes.instr.addrmode = INSTR_ADDRMODE["RAW"];
+				|| this.tokens[1].tokenType == Lexer.TOKEN_BASE.char) opcodes[0] |= (INSTR_ADDRMODE["RAW"] << 56);
 			
-			opcodes.address = this.compileParam(this.tokens[1]);
+			opcodes[1] = this.compileParam(parser,this.tokens[1]);
 		}
 		
-		if(this.tokens.length == 4) opcodes.value = this.compileParam(this.tokens[3]);
+		if(this.tokens.length == 4) opcodes[2] = this.compileParam(parser,this.tokens[3]);
 		
 		switch(this.name) {
 			case "nop":
-				opcodes.instr.opcode = 0;
+				opcodes[0] |= (0 << 48);
 				break;
 			case "add":
-				opcodes.instr.opcode = 1;
+				opcodes[0] |= (1 << 48);
 				break;
 			case "sub":
-				opcodes.instr.opcode = 2;
+				opcodes[0] |= (2 << 48);
 				break;
 			case "mul":
-				opcodes.instr.opcode = 3;
+				opcodes[0] |= (3 << 48);
 				break;
 			case "div":
-				opcodes.instr.opcode = 4;
+				opcodes[0] |= (4 << 48);
 				break;
 			case "and":
-				opcodes.instr.opcode = 5;
+				opcodes[0] |= (5 << 48);
 				break;
 			case "or":
-				opcodes.instr.opcode = 6;
+				opcodes[0] |= (6 << 48);
 				break;
 			case "xor":
-				opcodes.instr.opcode = 7;
+				opcodes[0] |= (7 << 48);
 				break;
 			case "nor":
-				opcodes.instr.opcode = 8;
+				opcodes[0] |= (8 << 48);
 				break;
 			case "nand":
-				opcodes.instr.opcode = 9;
+				opcodes[0] |= (9 << 48);
 				break;
 			case "mod":
-				opcodes.instr.opcode = 10;
+				opcodes[0] |= (10 << 48);
 				break;
 			case "lshift":
-				opcodes.instr.opcode = 11;
+				opcodes[0] |= (11 << 48);
 				break;
 			case "rshift":
-				opcodes.instr.opcode = 12;
+				opcodes[0] |= (12 << 48);
 				break;
 			case "cmp":
-				opcodes.instr.opcode = 13;
+				opcodes[0] |= (13 << 48);
 				break;
 			case "grtn":
-				opcodes.instr.opcode = 14;
+				opcodes[0] |= (14 << 48);
 				break;
 			case "lstn":
-				opcodes.instr.opcode = 15;
+				opcodes[0] |= (15 << 48);
 				break;
 			case "jit":
-				opcodes.instr.opcode = 16;
+				opcodes[0] |= (16 << 48);
 				break;
 			case "jmp":
-				opcodes.instr.opcode = 17;
+				opcodes[0] |= (17 << 48);
 				break;
 			case "call":
-				opcodes.instr.opcode = 18;
+				opcodes[0] |= (18 << 48);
 				break;
 			case "ret":
-				opcodes.instr.opcode = 19;
+				opcodes[0] |= (19 << 48);
 				break;
 			case "push":
-				opcodes.instr.opcode = 20;
+				opcodes[0] |= (20 << 48);
 				break;
 			case "pop":
-				opcodes.instr.opcode = 21;
+				opcodes[0] |= (21 << 48);
 				break;
 			case "mov":
-				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes.instr.opcode = 22;
-				else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address || this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) opcodes.instr.opcode = 23;
+				if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.register) opcodes[0] |= (22 << 48);
+				else if(this.tokens[1].tokenType == Lexer.TOKEN_BASE.address || this.tokens[1].tokenType == Lexer.TOKEN_BASE.identifier) opcodes[0] |= (23 << 48);
 				else throw new Error("Address parameter is not a register or memory address");
 				break;
 			case "int":
-				opcodes.instr.opcode = 24;
+				opcodes[0] |= (24 << 48);
 				break;
 			case "iret":
-				opcodes.instr.opcode = 25;
+				opcodes[0] |= (25 << 48);
 				break;
 			case "lditbl":
-				opcodes.instr.opcode = 26;
+				opcodes[0] |= (26 << 48);
 				break;
 			case "rst":
-				opcodes.instr.opcode = 27;
+				opcodes[0] |= (27 << 48);
 				break;
 			default: throw new Error("Invalid instruction");
 		}
-		return INSTR.pack(opcodes);
+		for(var i = 0;i < opcodes.length;i++) {
+			if(!(opcodes[i] instanceof jints.UInt64)) opcodes[i] = new jints.UInt64(opcodes[i]);
+		}
+		for(var i = 0;i < opcodes.length;i++) opcodes[i] = opcodes[i].toArray();
+		var buff = Buffer.alloc(8*3);
+		var index = 0;
+		for(var i = 0;i < opcodes.length;i++) {
+			for(var x = 0;x < 8;x++) buff[index++] = opcodes[i][x];
+		}
+		return buff;
 	}
 }
 
@@ -298,8 +289,10 @@ class Parser {
 				if(this.findFunction(token.image.replace(":","")) != null) throw new Error("Function already exists");
 				return new TokenFunction(token,tokens);
 			} else {
-				var size = INSTR_SIZES[token.image.length]+1;
+				if(typeof(INSTR_SIZES[token.image]) == "undefined") throw new Error("No such instruction called \""+token.image+"\" exists");
+				var size = INSTR_SIZES[token.image]+1;
 				var tokens = lexerResult.tokens.slice(index,index+size);
+				//console.log(tokens,size);
 				return new TokenInstruction(tokens);
 			}
 		} catch(ex) {

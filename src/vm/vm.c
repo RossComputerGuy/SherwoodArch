@@ -272,7 +272,7 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 								break;
 							}
 						} else {
-							err = savm_cpu_regwrite(vm,addr)a+b);
+							err = savm_cpu_regwrite(vm,addr,a+b);
 							if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR) return err;
 							if(err == SAVM_ERROR_INVAL_ADDR) {
 								err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
