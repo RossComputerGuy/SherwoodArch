@@ -1,3 +1,4 @@
+const crc = require("crc");
 const EventEmitter = require("events");
 const fs = require("fs");
 const jints = require("jints");
@@ -649,6 +650,7 @@ class VirtualMachine extends EventEmitter {
 						for(var i = 0;i < this.cpu.cores[this.cpu.currentCore].ivt.length;i++) this.cpu.cores[this.cpu.currentCore].ivt[i] = this.read(addr+i);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
+				/* Misc Instructions */
 				case 27: /* RST */
 					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
 						for(var i = 0;i < this.cpu.cores.length;i++) this.cpu.cores[i].running = false;
@@ -657,6 +659,26 @@ class VirtualMachine extends EventEmitter {
 						this.start();
 						this.cpu.cores[this.cpu.currentCore].regs.cycle[0] = -1;
 					} else this.intr(CPU_INT["BADPERM"]);
+					break;
+				case 28: /* CRC */
+					var size = val;
+					switch(instr_addrmode) {
+						case INSTR_ADDRMODE["REG"]:
+							addr = this.regread(addr);
+							size = this.regread(val);
+							break;
+						case INSTR_ADDRMODE["ADDR"]:
+							addr = this.read(addr);
+							size = this.read(val);
+							break;
+						case INSTR_ADDRMODE["RAW"]:
+							break;
+						default: this.intr(CPU_INT["BADADDR"]);
+							break;
+					}
+					var buff = [];
+					for(var i = 0;i < size;i++) buff.push(this.read(addr+i));
+					this.cpu.cores[this.cpu.currentCore].regs.tmp = crc.crc32(buff);
 					break;
 				default:
 					this.intr(CPU_INT["BADINSTR"]);

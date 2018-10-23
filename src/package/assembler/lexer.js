@@ -29,7 +29,8 @@ const TOKEN_INSTRUCTIONS = {
 	"int": createToken({ name: "int", pattern: /int/ }),
 	"iret": createToken({ name: "iret", pattern: /iret/ }),
 	"lditbl": createToken({ name: "lditbl", pattern: /lditbl/ }),
-	"rst": createToken({ name: "rst", pattern: /rst/ })
+	"rst": createToken({ name: "rst", pattern: /rst/ }),
+	"crc": createToken({ name: "crc", pattern: /crc/ })
 };
 
 const TOKEN_BASE = {

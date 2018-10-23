@@ -46,7 +46,8 @@ const INSTR_SIZES = {
 	"int": 1,
 	"iret": 1,
 	"lditbl": 1,
-	"rst": 0
+	"rst": 0,
+	"crc": 3
 };
 
 class Token {
@@ -215,6 +216,9 @@ class TokenInstruction extends Token {
 				break;
 			case "rst":
 				opcodes[0] |= (27 << 40);
+				break;
+			case "crc":
+				opcodes[0] |= (28 << 40);
 				break;
 			default: throw new Error("Invalid instruction");
 		}

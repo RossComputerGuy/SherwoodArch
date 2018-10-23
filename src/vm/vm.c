@@ -1,3 +1,4 @@
+#include <savm/crc32.h>
 #include <savm/error.h>
 #include <savm/utils.h>
 #include <savm/vm.h>
@@ -1677,6 +1678,64 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 			} else {
 				err = savm_cpu_intr(vm,SAVM_CPU_INT_BADPERM);
 				if(err != SAVM_ERROR_NONE) return err;
+			}
+			break;
+		case 28: /* CRC */
+			{
+				size_t size = 0;
+				switch(instr_addrmode) {
+					case SAVM_INSTR_ADDRMODE_REG:
+						err = savm_cpu_regread(vm,addr,&addr);
+						if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+						if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+							err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+							if(err != SAVM_ERROR_NONE) return err;
+							break;
+						}
+						err = savm_cpu_regread(vm,val,&size);
+						if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+						if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+							err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+							if(err != SAVM_ERROR_NONE) return err;
+							break;
+						}
+						break;
+					case SAVM_INSTR_ADDRMODE_ADDR:
+						err = savm_ioctl_read(vm,addr,&addr);
+						if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+						if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+							err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+							if(err != SAVM_ERROR_NONE) return err;
+							break;
+						}
+						err = savm_ioctl_read(vm,val,&size);
+						if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+						if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+							err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+							if(err != SAVM_ERROR_NONE) return err;
+							break;
+						}
+						break;
+					case SAVM_INSTR_ADDRMODE_RAW:
+						size = val;
+						break;
+					default:
+						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADINSTR);
+						if(err != SAVM_CPU_INT_BADINSTR) return err;
+						break;
+				}
+				vm->cpu.cores[vm->cpu.currentCore].regs.tmp = 0;
+				for(size_t i = 0;i < size;i++) {
+					uint64_t tmp;
+					err = savm_ioctl_read(vm,addr+i,&tmp);
+					if(err != SAVM_ERROR_NONE && err != SAVM_ERROR_INVAL_ADDR && err != SAVM_ERROR_NOTMAPPED) return err;
+					if(err == SAVM_ERROR_INVAL_ADDR || err != SAVM_ERROR_NOTMAPPED) {
+						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADADDR);
+						if(err != SAVM_ERROR_NONE) return err;
+						break;
+					}
+					vm->cpu.cores[vm->cpu.currentCore].regs.tmp = (vm->cpu.cores[vm->cpu.currentCore].regs.tmp << 8) ^ crc32_table[((vm->cpu.cores[vm->cpu.currentCore].regs.tmp >> 24) ^ tmp) & 255];
+				}
 			}
 			break;
 		default:
