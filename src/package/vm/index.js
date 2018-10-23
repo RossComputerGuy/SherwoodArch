@@ -448,6 +448,7 @@ class VirtualMachine extends EventEmitter {
 							break;
 					}
 					break;
+				/* Logic Instructions */
 				case 13: /* CMP */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
@@ -492,6 +493,9 @@ class VirtualMachine extends EventEmitter {
 						case INSTR_ADDRMODE["ADDR"]:
 							if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
 							break;
+						case INSTR_ADDRMODE["VAL"]:
+							if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
+							break;
 						default: this.intr(CPU_INT["BADADDR"]);
 							break;
 					}
@@ -504,6 +508,9 @@ class VirtualMachine extends EventEmitter {
 							break;
 						case INSTR_ADDRMODE["ADDR"]:
 							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+							break;
+						case INSTR_ADDRMODE["VAL"]:
+							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
 							break;
 						default: this.intr(CPU_INT["BADADDR"]);
 							break;
@@ -518,6 +525,9 @@ class VirtualMachine extends EventEmitter {
 								break;
 							case INSTR_ADDRMODE["ADDR"]:
 								this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+								break;
+							case INSTR_ADDRMODE["VAL"]:
+								this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
 								break;
 							default: this.intr(CPU_INT["BADADDR"]);
 								break;

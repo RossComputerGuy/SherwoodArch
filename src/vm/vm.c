@@ -1340,7 +1340,6 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 							if(err != SAVM_ERROR_NONE) return err;
 							break;
 						}
-						if(vm->cpu.cores[vm->cpu.currentCore].regs.tmp) vm->cpu.cores[vm->cpu.currentCore].regs.pc = a;
 						break;
 					case SAVM_INSTR_ADDRMODE_ADDR:
 						err = savm_ioctl_read(vm,addr,&a);
@@ -1350,19 +1349,21 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 							if(err != SAVM_ERROR_NONE) return err;
 							break;
 						}
-						if(vm->cpu.cores[vm->cpu.currentCore].regs.tmp) vm->cpu.cores[vm->cpu.currentCore].regs.pc = a;
+						break;
+					case SAVM_INSTR_ADDRMODE_RAW:
+						a = addr;
 						break;
 					default:
 						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADINSTR);
 						if(err != SAVM_CPU_INT_BADINSTR) return err;
 						break;
 				}
+				if(vm->cpu.cores[vm->cpu.currentCore].regs.tmp) vm->cpu.cores[vm->cpu.currentCore].regs.pc = a;
 			}
 			break;
 		/* Memory Instructions */
 		case 17: /* JMP */
 			{
-				uint64_t a;
 				switch(instr_addrmode) {
 					case SAVM_INSTR_ADDRMODE_REG:
 						err = savm_cpu_regread(vm,addr,&vm->cpu.cores[vm->cpu.currentCore].regs.pc);
@@ -1381,6 +1382,9 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 							if(err != SAVM_ERROR_NONE) return err;
 							break;
 						}
+						break;
+					case SAVM_INSTR_ADDRMODE_RAW:
+						vm->cpu.cores[vm->cpu.currentCore].regs.pc = addr;
 						break;
 					default:
 						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADINSTR);
@@ -1410,6 +1414,9 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 							if(err != SAVM_ERROR_NONE) return err;
 							break;
 						}
+						break;
+					case SAVM_INSTR_ADDRMODE_RAW:
+						vm->cpu.cores[vm->cpu.currentCore].regs.pc = addr;
 						break;
 					default:
 						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADINSTR);
@@ -1589,6 +1596,7 @@ savm_error_e savm_cpu_cycle_core(savm_t* vm,uint8_t core) {
 						}
 						break;
 					case SAVM_INSTR_ADDRMODE_RAW:
+						val = addr;
 						break;
 					default:
 						err = savm_cpu_intr(vm,SAVM_CPU_INT_BADINSTR);
