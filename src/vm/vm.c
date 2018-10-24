@@ -127,6 +127,7 @@ savm_error_e savm_cpu_intr(savm_t* vm,uint64_t intr) {
 	vm->cpu.cores[vm->cpu.currentCore].regs.flags &= ~SAVM_CPU_REG_FLAG_PRIV_USER;
 	vm->cpu.cores[vm->cpu.currentCore].intr = intr;
 	vm->cpu.cores[vm->cpu.currentCore].regs.pc = vm->cpu.cores[vm->cpu.currentCore].ivt[intr];
+	if(vm->cpu.cores[vm->cpu.currentCore].ivt[intr] == 0) return SAVM_ERROR_DOUBLE_FAULT;
 	return SAVM_ERROR_NONE;
 }
 

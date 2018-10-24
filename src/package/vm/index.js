@@ -174,6 +174,7 @@ class VirtualMachine extends EventEmitter {
 			this.cpu.cores[i] = setupCPUCore();
 			
 			/* Reset the registers */
+			this.cpu.cores[i].regs.flags[0] |= CPU_REG_FLAG_PRIV_KERN;
 			this.cpu.cores[i].regs = this.cpu.cores[i].iregs = setupRegisters();
 			this.cpu.cores[i].irqs = [];
 			this.cpu.cores[i].stack.fill(0);
@@ -190,7 +191,7 @@ class VirtualMachine extends EventEmitter {
 	}
 	
 	intr(i) {
-		if(i > this.cpu.cores[this.cpu.currentCore].ivt.length) throw new Error("SAVM_ERROR_INVAL_INT");
+		if(i > this.cpu.cores[this.cpu.currentCore].ivt.length) throw new Error("SAVM_ERROR_INVAL_INT: "+i);
 		if(i > 5 && this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_ENIRQ) return this.cpu.cores[this.cpu.currentCore].irqs.push(i);
 		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR) {
 			this.cpu.cores[this.cpu.currentCore].intr[0] = CPU_INT["FAULT"];
@@ -202,6 +203,7 @@ class VirtualMachine extends EventEmitter {
 		this.cpu.cores[this.cpu.currentCore].regs.flags[0] &= ~CPU_REG_FLAG_PRIV_USER;
 		this.cpu.cores[this.cpu.currentCore].intr[0] = i;
 		this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.cpu.cores[this.cpu.currentCore].ivt[i];
+		if(this.cpu.cores[this.cpu.currentCore].ivt[i] == 0) throw new Error("SAVM_ERROR_DOUBLE_FAULT: IVT is not loaded");
 		
 		this.emit("cpu/interrupt",i);
 	}
@@ -219,77 +221,77 @@ class VirtualMachine extends EventEmitter {
 				if(i >= 17 && i < 27) return this.cpu.cores[this.cpu.currentCore].regs.index[i-17];
 				if(i >= 28 && i < 38) return this.cpu.cores[this.cpu.currentCore].regs.addr[i-28];
 				if(i >= 39 && i < 49) return this.cpu.cores[this.cpu.currentCore].regs.ptr[i-39];
-				throw new Error("SAVM_ERROR_INVAL_ADDR");
+				throw new Error("SAVM_ERROR_INVAL_ADDR: 0x"+i.toString(16).toUpperCase());
 		}
 	}
-	regwrite(i,v) {
+	regwrite(i,val) {
 		switch(i) {
 			case 0: /* flags */
 				if(val & CPU_REG_FLAG_INTR && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR)) val &= ~CPU_REG_FLAG_INTR;
-				if(val & CPU_REG_FLAG_PAGING && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING)) val &= ~SAVM_CPU_REG_FLAG_PAGING;
+				if(val & CPU_REG_FLAG_PAGING && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING)) val &= ~CPU_REG_FLAG_PAGING;
 				if(val & CPU_REG_FLAG_PRIV_KERN && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_KERN)) val &= ~SAVM_CPU_REG_FLAG_PRIV_KERN;
 				if(val & CPU_REG_FLAG_PRIV_USER && !(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) val &= ~CPU_REG_FLAG_PRIV_USER;
 				
-				if(!(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & SAVM_CPU_REG_FLAG_PAGING) && val & SAVM_CPU_REG_FLAG_PAGING) {
+				if(!(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_PAGING) && val & CPU_REG_FLAG_PAGING) {
 					if(this.ioctl.pgdir == null) return this.intr(CPU_INT["FAULT"]);
 				}
-				this.cpu.cores[this.cpu.currentCore].regs.flags[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.flags[0] = val;
 				break;
 			case 1: /* tmp */
-				this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = val;
 				break;
 			case 2: /* sp */
-				this.cpu.cores[this.cpu.currentCore].regs.sp[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.sp[0] = val;
 				break;
 			case 3: /* ip */
-				this.cpu.cores[this.cpu.currentCore].regs.ip[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.ip[0] = val;
 				break;
 			case 4: /* pc */
-				this.cpu.cores[this.cpu.currentCore].regs.pc[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.pc[0] = val;
 				break;
 			case 5: /* cycle */
-				this.cpu.cores[this.cpu.currentCore].regs.cycle[0] = v;
+				this.cpu.cores[this.cpu.currentCore].regs.cycle[0] = val;
 				break;
 			default:
 				if(i >= 6 && i < 16) {
-					this.cpu.cores[this.cpu.currentCore].regs.data[i-6] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.data[i-6] = val;
 					break;
 				}
 				if(i >= 17 && i < 27) {
-					this.cpu.cores[this.cpu.currentCore].regs.index[i-17] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.index[i-17] = val;
 					break;
 				}
 				if(i >= 28 && i < 38) {
-					this.cpu.cores[this.cpu.currentCore].regs.addr[i-28] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.addr[i-28] = val;
 					break;
 				}
 				if(i >= 39 && i < 49) {
-					this.cpu.cores[this.cpu.currentCore].regs.ptr[i-39] = v;
+					this.cpu.cores[this.cpu.currentCore].regs.ptr[i-39] = val;
 					break;
 				}
-				throw new Error("SAVM_ERROR_INVAL_ADDR");
+				throw new Error("SAVM_ERROR_INVAL_ADDR: 0x"+i.toString(16).toUpperCase());
 		}
-		this.emit("cpu/registers/write",i,v);
+		this.emit("cpu/registers/write",i,val);
 	}
 	cycleCore(core) {
-		if(core > this.cpu.cores.length) throw new Error("SAVM_ERROR_INVAL_ADDR");
+		if(core > this.cpu.cores.length) throw new Error("SAVM_ERROR_INVAL_ADDR: Core #"+core+" doesn't exist");
 		
 		this.cpu.currentCore = core;
 	
-		if(this.cpu.cores[this.cpu.currentCore].regs.pc[0] == 0) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = IO_RAM_BASE+(this.cpu.cores[this.cpu.currentCore].regs.cycle[0]*3);
+		if(this.cpu.cores[core].regs.pc[0] == 0) this.cpu.cores[core].regs.pc[0] = IO_RAM_BASE+(this.cpu.cores[core].regs.cycle[0]*3);
 		
 		/* Fetches the instruction from memory */
-		this.cpu.cores[this.cpu.currentCore].regs.ip[0] = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]);
+		this.cpu.cores[core].regs.ip[0] = this.read(this.cpu.cores[core].regs.pc[0]);
 		
 		/* Decodes the instruction */
-		var instr_opcode = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],40,8);
-		var instr_addrmode = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],48,8);
-		var instr_flags = BITS_EXTRACT(this.cpu.cores[this.cpu.currentCore].regs.ip[0],56,8);
+		var instr_opcode = BITS_EXTRACT(this.cpu.cores[core].regs.ip[0],40,8);
+		var instr_addrmode = BITS_EXTRACT(this.cpu.cores[core].regs.ip[0],48,8);
+		var instr_flags = BITS_EXTRACT(this.cpu.cores[core].regs.ip[0],56,8);
 		
 		if(instr_addrmode == 3) instr_addrmode = 2;
 		
-		var addr = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+1);
-		var val = this.read(this.cpu.cores[this.cpu.currentCore].regs.pc[0]+2);
+		var addr = this.read(this.cpu.cores[core].regs.pc[0]+1);
+		var val = this.read(this.cpu.cores[core].regs.pc[0]+2);
 		
 		this.cpu.cores[this.cpu.currentCore].regs.pc[0] += 3;
 		
@@ -297,8 +299,8 @@ class VirtualMachine extends EventEmitter {
 		try {
 			switch(instr_opcode) {
 				case 0: /* NOP */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						this.cpu.cores[this.cpu.currentCore].running = false;
+					if(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_PRIV_KERN || !(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) {
+						this.cpu.cores[core].running = false;
 						if(this.cpu.currentCore == 0) this.stop();
 					}
 					else this.intr(CPU_INT["BADPERM"]);
@@ -459,10 +461,10 @@ class VirtualMachine extends EventEmitter {
 				case 13: /* CMP */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
-							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) == this.regread(val);
+							this.cpu.cores[core].regs.tmp[0] = this.regread(addr) == this.regread(val);
 							break;
 						case INSTR_ADDRMODE["ADDR"]:
-							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) == this.read(val);
+							this.cpu.cores[core].regs.tmp[0] = this.read(addr) == this.read(val);
 							break;
 						default: this.intr(CPU_INT["BADADDR"]);
 							break;
@@ -471,10 +473,10 @@ class VirtualMachine extends EventEmitter {
 				case 14: /* GRTN */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
-							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) > this.regread(val);
+							this.cpu.cores[core].regs.tmp[0] = this.regread(addr) > this.regread(val);
 							break;
 						case INSTR_ADDRMODE["ADDR"]:
-							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) > this.read(val);
+							this.cpu.cores[core].regs.tmp[0] = this.read(addr) > this.read(val);
 							break;
 						default: this.intr(CPU_INT["BADADDR"]);
 							break;
@@ -483,10 +485,10 @@ class VirtualMachine extends EventEmitter {
 				case 15: /* LSTN */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
-							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.regread(addr) < this.regread(val);
+							this.cpu.cores[core].regs.tmp[0] = this.regread(addr) < this.regread(val);
 							break;
 						case INSTR_ADDRMODE["ADDR"]:
-							this.cpu.cores[this.cpu.currentCore].regs.tmp[0] = this.read(addr) < this.read(val);
+							this.cpu.cores[core].regs.tmp[0] = this.read(addr) < this.read(val);
 							break;
 						default: this.intr(CPU_INT["BADADDR"]);
 							break;
@@ -495,13 +497,13 @@ class VirtualMachine extends EventEmitter {
 				case 16: /* JIT */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
-							if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
+							if(this.cpu.cores[core].regs.tmp[0]) this.cpu.cores[core].regs.pc[0] = this.regread(addr);
 							break;
 						case INSTR_ADDRMODE["ADDR"]:
-							if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+							if(this.cpu.cores[core].regs.tmp[0]) this.cpu.cores[core].regs.pc[0] = this.read(addr);
 							break;
-						case INSTR_ADDRMODE["VAL"]:
-							if(this.cpu.cores[this.cpu.currentCore].regs.tmp[0]) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
+						case INSTR_ADDRMODE["RAW"]:
+							if(this.cpu.cores[core].regs.tmp[0]) this.cpu.cores[core].regs.pc[0] = addr;
 							break;
 						default: this.intr(CPU_INT["BADADDR"]);
 							break;
@@ -511,30 +513,30 @@ class VirtualMachine extends EventEmitter {
 				case 17: /* JMP */
 					switch(instr_addrmode) {
 						case INSTR_ADDRMODE["REG"]:
-							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
+							this.cpu.cores[core].regs.pc[0] = this.regread(addr);
 							break;
 						case INSTR_ADDRMODE["ADDR"]:
-							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+							this.cpu.cores[core].regs.pc[0] = this.read(addr);
 							break;
-						case INSTR_ADDRMODE["VAL"]:
-							this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
+						case INSTR_ADDRMODE["RAW"]:
+							this.cpu.cores[core].regs.pc[0] = addr;
 							break;
 						default: this.intr(CPU_INT["BADADDR"]);
 							break;
 					}
 					break;
 				case 18: /* CALL */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
-						this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.cpu.cores[this.cpu.currentCore].regs.pc[0];
+					if(this.cpu.cores[core].regs.sp[0] < this.cpu.cores[core].stack.length) {
+						this.cpu.cores[core].stack[this.cpu.cores[core].regs.sp[0]++] = this.cpu.cores[core].regs.pc[0];
 						switch(instr_addrmode) {
 							case INSTR_ADDRMODE["REG"]:
-								this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.regread(addr);
+								this.cpu.cores[core].regs.pc[0] = this.regread(addr);
 								break;
 							case INSTR_ADDRMODE["ADDR"]:
-								this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.read(addr);
+								this.cpu.cores[core].regs.pc[0] = this.read(addr);
 								break;
-							case INSTR_ADDRMODE["VAL"]:
-								this.cpu.cores[this.cpu.currentCore].regs.pc[0] = addr;
+							case INSTR_ADDRMODE["RAW"]:
+								this.cpu.cores[core].regs.pc[0] = addr;
 								break;
 							default: this.intr(CPU_INT["BADADDR"]);
 								break;
@@ -542,17 +544,17 @@ class VirtualMachine extends EventEmitter {
 					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 19: /* RET */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--];
+					if(this.cpu.cores[core].regs.sp[0] < this.cpu.cores[core].stack.length) this.cpu.cores[core].regs.pc[0] = this.cpu.cores[core].stack[this.cpu.cores[core].regs.sp[0]--];
 					else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 20: /* PUSH */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
+					if(this.cpu.cores[core].regs.sp[0] < this.cpu.cores[core].stack.length) {
 						switch(instr_addrmode) {
 							case INSTR_ADDRMODE["REG"]:
-								this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.regread(addr);
+								this.cpu.cores[core].stack[this.cpu.cores[core].regs.sp[0]++] = this.regread(addr);
 								break;
 							case INSTR_ADDRMODE["ADDR"]:
-								this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]++] = this.read(addr);
+								this.cpu.cores[core].stack[this.cpu.cores[core].regs.sp[0]++] = this.read(addr);
 								break;
 							default: this.intr(CPU_INT["BADADDR"]);
 								break;
@@ -560,13 +562,13 @@ class VirtualMachine extends EventEmitter {
 					} else this.intr(CPU_INT["STACK_OVERFLOW"]);
 					break;
 				case 21: /* POP */
-					if(this.cpu.cores[this.cpu.currentCore].regs.sp[0] < this.cpu.cores[this.cpu.currentCore].stack.length) {
+					if(this.cpu.cores[core].regs.sp[0] < this.cpu.cores[core].stack.length) {
 						switch(instr_addrmode) {
 							case INSTR_ADDRMODE["REG"]:
-								this.regwrite(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
+								this.regwrite(addr,this.cpu.cores[core].stack[this.cpu.cores[core].regs.sp[0]--]);
 								break;
 							case INSTR_ADDRMODE["ADDR"]:
-								this.write(addr,this.cpu.cores[this.cpu.currentCore].stack[this.cpu.cores[this.cpu.currentCore].regs.sp[0]--]);
+								this.write(addr,this.cpu.cores[core].stack[this.cpu.cores[core].regs.sp[0]--]);
 								break;
 							default: this.intr(CPU_INT["BADADDR"]);
 								break;
@@ -605,7 +607,7 @@ class VirtualMachine extends EventEmitter {
 					break;
 				/* Interupt Instructions */
 				case 24: /* INT */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[core].regs.flags & CPU_REG_FLAG_PRIV_KERN || !(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) {
 						var a;
 						switch(instr_addrmode) {
 							case INSTR_ADDRMODE["REG"]:
@@ -628,13 +630,13 @@ class VirtualMachine extends EventEmitter {
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 25: /* IRET */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
-						if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.cores[this.cpu.currentCore].regs = this.cpu.cores[this.cpu.currentCore].iregs;
+					if(this.cpu.cores[core].regs.flags & CPU_REG_FLAG_PRIV_KERN || !(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) {
+						if(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_INTR) this.cpu.cores[core].regs = this.cpu.cores[core].iregs;
 						else this.intr(CPU_INT["FAULT"]);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 26: /* LDITBL */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[core].regs.flags & CPU_REG_FLAG_PRIV_KERN || !(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) {
 						switch(instr_addrmode) {
 							case INSTR_ADDRMODE["REG"]:
 								addr = this.regread(addr);
@@ -647,17 +649,17 @@ class VirtualMachine extends EventEmitter {
 							default: this.intr(CPU_INT["BADADDR"]);
 								break;
 						}
-						for(var i = 0;i < this.cpu.cores[this.cpu.currentCore].ivt.length;i++) this.cpu.cores[this.cpu.currentCore].ivt[i] = this.read(addr+i);
+						for(var i = 0;i < this.cpu.cores[core].ivt.length;i++) this.cpu.cores[core].ivt[i] = this.read(addr+i);
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				/* Misc Instructions */
 				case 27: /* RST */
-					if(this.cpu.cores[this.cpu.currentCore].regs.flags & CPU_REG_FLAG_PRIV_KERN) {
+					if(this.cpu.cores[core].regs.flags & CPU_REG_FLAG_PRIV_KERN || !(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_PRIV_USER)) {
 						for(var i = 0;i < this.cpu.cores.length;i++) this.cpu.cores[i].running = false;
 						this.stop();
 						this.reset();
 						this.start();
-						this.cpu.cores[this.cpu.currentCore].regs.cycle[0] = -1;
+						this.cpu.cores[core].regs.cycle[0] = -1;
 					} else this.intr(CPU_INT["BADPERM"]);
 					break;
 				case 28: /* CRC */
@@ -678,7 +680,7 @@ class VirtualMachine extends EventEmitter {
 					}
 					var buff = [];
 					for(var i = 0;i < size;i++) buff.push(this.read(addr+i));
-					this.cpu.cores[this.cpu.currentCore].regs.tmp = crc.crc32(buff);
+					this.cpu.cores[core].regs.tmp = crc.crc32(buff);
 					break;
 				default:
 					this.intr(CPU_INT["BADINSTR"]);
@@ -692,11 +694,11 @@ class VirtualMachine extends EventEmitter {
 		if(this.mailbox) this.mailbox.cycle(this);
 		if(this.uart) this.uart.cycle(this);
 		
-		if(this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_INTR && this.cpu.cores[this.cpu.currentCore].regs.flags[0] & CPU_REG_FLAG_ENIRQ && this.cpu.cores[this.cpu.currentCore].irqs.length > 0) this.intr(this.cpu.cores[this.cpu.currentCore].irqs.shift());
+		if(this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_INTR && this.cpu.cores[core].regs.flags[0] & CPU_REG_FLAG_ENIRQ && this.cpu.cores[core].irqs.length > 0) this.intr(this.cpu.cores[core].irqs.shift());
 		
 		this.emit("cpu/cycleCore",core);
 		
-		this.cpu.cores[this.cpu.currentCore].regs.cycle[0]++;
+		this.cpu.cores[core].regs.cycle[0]++;
 	}
 	cycle() {
 		for(var i = 0;i < this.cpu.cores.length;i++) {
