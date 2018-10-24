@@ -1,18 +1,15 @@
+const fs = require("fs");
 const jints = require("jints");
 
-function decode64bits(buff,size) {
-	if(typeof(size) != "number") size = 1;
-	return new jints.UInt64(buff).toArray();
-	//return _.float64("value").unpack(buff);
-}
-
-function encode64bits(i,size) {
-	if(typeof(size) != "number") size = 1;
-	return new jints.UInt64(i).toArray();
-	//return _.float64("value",size).pack(i);
+function writeArray(file,array) {
+	var fd = fs.openSync(file,"w");
+	for(var i = 0;i < array.length;i++) {
+		var value = Buffer.from(new jints.UInt64(array[i]).toArray());
+		fs.writeSync(fd,value);
+	}
+	fs.closeSync(fd);
 }
 
 module.exports = {
-	decode64bits: decode64bits,
-	encode64bits: encode64bits
+	writeArray: writeArray
 };

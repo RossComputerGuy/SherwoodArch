@@ -23,10 +23,10 @@ process.stdin.on("data",buff => {
 	vm.uart.emit("input",buff.toString());
 });
 vm.uart.on("output",(str) => process.stdout.write(str));
-if(program.ram && fs.existsSync(program.ram)) vm.loadFile(0xA0000000,program.ram);
+if(program.ram && fs.existsSync(program.ram)) vm.loadFirmware(program.ram);
 if(program.firmware) vm.loadFirmware(program.firmware);
 vm.on("cpu/stop",() => {
-	if(program.ram) fs.writeFileSync(program.ram,vm.ioctl.ram);
+	if(program.ram) vm.dumpRAM(program.ram);
 	vm.destroy();
 	process.exit();
 });

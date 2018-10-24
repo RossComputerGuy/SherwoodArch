@@ -5,6 +5,7 @@ const jints = require("jints");
 const Mailbox = require("./hardware/mailbox");
 const RTC = require("./hardware/rtc");
 const UART = require("./hardware/uart");
+const utils = require("../utils");
 
 const CPU_REG_FLAG_INTR = (1 << 0);
 const CPU_REG_FLAG_ENIRQ = (1 << 1);
@@ -738,9 +739,9 @@ class VirtualMachine extends EventEmitter {
 		},this.cpu.clockspeed);
 	}
 	stop() {
+		this.emit("cpu/stop");
 		if(typeof(this.interval) == "number") clearInterval(this.interval);
 		this.cpu.cores[0].running = false;
-		this.emit("cpu/stop");
 	}
 	loadFirmware(path) {
 		var buff = this._buff2uint64(fs.readFileSync(path));
@@ -750,10 +751,8 @@ class VirtualMachine extends EventEmitter {
 		var buff = this._buff2uint64(fs.readFileSync(path));
 		for(var i = 0;i < buff.length;i++) this.write(addr,buff[i]);
 	}
-	dumpFile(addr,size,path) {
-		var buff = new Float64Array(size);
-		for(var i = 0;i < buff.length;i++) buff[i] = this.read(i);
-		fs.writeFileSync(path,this._uint642buff(buff));
+	dumpRAM(file) {
+		utils.writeArray(file,this.ioctl.ram);
 	}
 	mmap(addr,end,read = () => 0,write = () => {}) {
 		for(var entry of this.ioctl.mmap) {
