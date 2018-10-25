@@ -1,7 +1,7 @@
 {
   "name": "saide",
   "productName": "saide",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Sherwood Architecture IDE",
   "main": "src/index.js",
   "scripts": {

@@ -102,9 +102,18 @@ class TokenInstruction extends Token {
 	compileFN(parser,token) {
 		return 0xA0000000+parser.findFunctionOffset(token.image);
 	}
+	compileData(parser,token) {
+		return 0xA0000000+parser.findDataOffset(token.image);
+	}
 	compileParam(parser,token) {
 		if(token.tokenType == Lexer.TOKEN_BASE.register) return this.compileRegister(token);
-		if(token.tokenType == Lexer.TOKEN_BASE.identifier) return this.compileFN(parser,token);
+		if(token.tokenType == Lexer.TOKEN_BASE.identifier) {
+			if(parser.findFunction(token.image) == null) throw new Error("No such function called \""+token.image+"\" exists");
+			else return this.compileFN(parser,token);
+			if(parser.findData(token.image) == null) throw new Error("No such data called \""+token.image+"\" exists");
+			else return this.compileData(parser,token);
+			throw new Error("No such token called \""+token.image+"\" exists");
+		}
 		if(token.tokenType == Lexer.TOKEN_BASE.address) return this.compileAddress(token);
 		if(token.tokenType == Lexer.TOKEN_BASE.char) return this.compileChar(token);
 		if(token.tokenType == Lexer.TOKEN_BASE.integer) {
@@ -258,6 +267,39 @@ class TokenFunction extends Token {
 	}
 }
 
+class TokenData extends Token {
+	constructor(dataToken,token) {
+		super("data");
+		this.token = token;
+		this.tokens = [dataToken,token];
+		this.name = dataToken.image.replace(".","");
+		this.length = 1;
+		switch(token.tokenType) {
+			case Lexer.TOKEN_BASE.char:
+			case Lexer.TOKEN_BASE.string:
+				var sb = { result: token.image.slice(1,-1) };
+				vm.runInNewContext("result = "+token.image+";",sb,"assembler.js");
+				this.value = Buffer.from(sb.result);
+				this.length = this.value.length;
+				break;
+			case Lexer.TOKEN_BASE.integer:
+				if(token.image.slice(0,2) == "0b") this.value = parseInt(token.image.replace("0b",""),2);
+				else if(token.image.slice(0,2) == "0x") this.value = parseInt(token.image.replace("0x",""),16);
+				else this.value = new jints.UInt64(parseInt(token.image)).toArray();
+				this.length = 8;
+				break;
+			default:
+				throw new Error("Unknown token type: "+token.tokenType.tokenName);
+		}
+		this.length = this.value.length;
+	}
+	compile(parser) {
+		var data = Buffer.alloc(this.length);
+		for(var i = 0;i < this.value.length;i++) data[i] = this.value[i];
+		return data;
+	}
+}
+
 class Parser {
 	constructor() {
 		this.errors = [];
@@ -278,9 +320,25 @@ class Parser {
 		}
 		return null;
 	}
+	findDataOffset(name) {
+		var offset = 0;
+		for(var token of this.tokens) {
+			if(token.type == "data" && token.name == name) return offset;
+			else offset += token.length;
+		}
+		return null;
+	}
+	findData(name) {
+		for(var token of this.tokens) {
+			if(token.type == "data" && token.name == name) return token;
+		}
+		return null;
+	}
 	parseToken(token,lexerResult,index) {
 		try {
-			if(token.tokenType == Lexer.TOKEN_BASE.fn) {
+			if(token.tokenType == Lexer.TOKEN_BASE.data) {
+				return new TokenData(token,lexerResult.tokens[index+1]);
+			} else if(token.tokenType == Lexer.TOKEN_BASE.fn) {
 				var end = lexerResult.tokens.length;
 				for(var i = index+1;i < lexerResult.tokens.length;i++) {
 					if(lexerResult.tokens[i].tokenType == Lexer.TOKEN_BASE.fn) {
@@ -301,7 +359,6 @@ class Parser {
 				if(typeof(INSTR_SIZES[token.image]) == "undefined") throw new Error("No such instruction called \""+token.image+"\" exists");
 				var size = INSTR_SIZES[token.image]+1;
 				var tokens = lexerResult.tokens.slice(index,index+size);
-				//console.log(tokens,size);
 				return new TokenInstruction(tokens);
 			}
 		} catch(ex) {

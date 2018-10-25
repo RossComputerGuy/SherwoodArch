@@ -204,9 +204,8 @@ class VirtualMachine extends EventEmitter {
 		this.cpu.cores[this.cpu.currentCore].regs.flags[0] &= ~CPU_REG_FLAG_PRIV_USER;
 		this.cpu.cores[this.cpu.currentCore].intr[0] = i;
 		this.cpu.cores[this.cpu.currentCore].regs.pc[0] = this.cpu.cores[this.cpu.currentCore].ivt[i];
-		if(this.cpu.cores[this.cpu.currentCore].ivt[i] == 0) throw new Error("SAVM_ERROR_DOUBLE_FAULT: IVT is not loaded");
-		
 		this.emit("cpu/interrupt",i);
+		if(this.cpu.cores[this.cpu.currentCore].ivt[i] == 0) throw new Error("SAVM_ERROR_DOUBLE_FAULT: IVT is not loaded");
 	}
 	regread(i) {
 		this.emit("cpu/registers/read",i);

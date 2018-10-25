@@ -1,9 +1,10 @@
 {
   "name": "@ross-technologies/sajs",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "The Sherwood Architecture for Node.js",
   "main": "index.js",
   "scripts": {
+    "test": "mocha",
     "build": "npm install && browserify ./index.js -o dist/sa.js"
   },
   "author": "Spaceboy Ross",
@@ -17,10 +18,12 @@
     "struct-fu": "^1.2.1"
   },
   "devDependencies": {
-    "browserify": "^16.2.3"
+    "browserify": "^16.2.3",
+    "mocha": "^5.2.0"
   },
   "bin": {
     "sasmc": "bin/sasmc.js",
+    "sald": "bin/sald.js",
     "savm": "bin/savm.js"
   },
   "repository": {

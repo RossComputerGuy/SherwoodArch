@@ -1,4 +1,5 @@
 $(IDE_BIN): $(IDE_SRC)
+	@mkdir -p $(BIN)
 	@cd $(IDE_SRC) && npm install --save
 	@cp -r $(SAJS_SRC) $(IDE_SRC)/node_modules/sajs && cd $(IDE_SRC)/node_modules/sajs && npm install --save
 	@cd $(IDE_SRC) && npm run make

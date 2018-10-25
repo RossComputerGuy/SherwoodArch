@@ -38,9 +38,11 @@ const TOKEN_BASE = {
 	"char": createToken({ name: "char", pattern: /'(\\?[^'\n]|\\')'?/ }),
 	"comma": createToken({ name: "comma", pattern: /,/ }),
 	"comment": createToken({ name: "comment", pattern: /#.*/, group: chevrotain.Lexer.SKIPPED }),
+	"data": createToken({ name: "register", pattern: /\.[a-zA-Z0-9]+/ }),
 	"fn": createToken({ name: "fn", pattern: /[a-zA-Z0-9]+:/ }),
 	"identifier": createToken({ name: "identifier", pattern: /\w+/ }),
 	"integer": createToken({ name: "integer", pattern: /0|[1-9]\d+/ }),
+	"string": createToken({ name: "string", pattern: /\".*\"/ }),
 	"register": createToken({ name: "register", pattern: /%[a-zA-Z0-9]+/ }),
 	"whitespace": createToken({ name: "whitespace", pattern: /\s+/, group: chevrotain.Lexer.SKIPPED })
 };
