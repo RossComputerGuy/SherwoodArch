@@ -712,10 +712,12 @@ class VirtualMachine extends EventEmitter {
 		var index = 0;
 		for(var i = 0;i < buff.length;i += 8) {
 			var b = buff.slice(i,i+8);
-			var arr = new Int32Array(new Uint8Array(buff.slice(i,i+8)).buffer);
-			var v = new jints.UInt64(0).join(arr[1],arr[0]);
-			v = parseInt(v.toString());
-			u64[index++] = v;
+			if(b.length == 8) {
+				var arr = new Int32Array(new Uint8Array(b).buffer);
+				var v = new jints.UInt64.join(arr[1],arr[0]);
+				v = parseInt(v.toString());
+				u64[index++] = v;
+			}
 		}
 		return u64;
 	}

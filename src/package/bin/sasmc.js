@@ -10,7 +10,7 @@ const program = require("commander")
 	.parse(process.argv);
 
 var asm = new Assembler();
-var prog = asm.compileFiles(program.args).instrs;
+var prog = asm.compileFiles(program.args).prog;
 for(var err of asm.errors) {
 	console.error(err);
 }

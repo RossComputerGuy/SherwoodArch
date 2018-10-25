@@ -108,10 +108,8 @@ class TokenInstruction extends Token {
 	compileParam(parser,token) {
 		if(token.tokenType == Lexer.TOKEN_BASE.register) return this.compileRegister(token);
 		if(token.tokenType == Lexer.TOKEN_BASE.identifier) {
-			if(parser.findFunction(token.image) == null) throw new Error("No such function called \""+token.image+"\" exists");
-			else return this.compileFN(parser,token);
-			if(parser.findData(token.image) == null) throw new Error("No such data called \""+token.image+"\" exists");
-			else return this.compileData(parser,token);
+			if(parser.findFunction(token.image) != null) return this.compileFN(parser,token);
+			if(parser.findData(token.image) != null) return this.compileData(parser,token);
 			throw new Error("No such token called \""+token.image+"\" exists");
 		}
 		if(token.tokenType == Lexer.TOKEN_BASE.address) return this.compileAddress(token);

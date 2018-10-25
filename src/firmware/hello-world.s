@@ -1,5 +1,4 @@
 main:
-	mov %flags,1
 	mov $0x10000013,'H'
 	mov $0x10000013,'e'
 	mov $0x10000013,'l'
