@@ -92,7 +92,7 @@ class VirtualMachine extends EventEmitter {
 		};
 		this.opts = opts;
 		
-		this.mailbox = new Mailbox();
+		this.mailbox = new Mailbox(this);
 		this.rtc = new RTC();
 		this.uart = new UART();
 	}
@@ -713,7 +713,7 @@ class VirtualMachine extends EventEmitter {
 		for(var i = 0;i < buff.length;i += 8) {
 			var b = buff.slice(i,i+8);
 			var arr = new Int32Array(new Uint8Array(buff.slice(i,i+8)).buffer);
-			var v = new jints.UInt64.join(arr[1],arr[0]);
+			var v = new jints.UInt64(0).join(arr[1],arr[0]);
 			v = parseInt(v.toString());
 			u64[index++] = v;
 		}

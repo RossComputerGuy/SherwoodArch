@@ -5,10 +5,11 @@ const MAILBOX_SIZE = 0x00000009;
 const MAILBOX_END = MAILBOX_BASE+MAILBOX_SIZE;
 
 class Mailbox {
-	constructor() {
+	constructor(vm) {
 		this.devices = [];
 		this.devIndex = 0;
 		this.dataIndex = 0;
+		this.vm = vm;
 	}
 	destroy() {
 		for(var dev of this.devices) {
@@ -26,7 +27,7 @@ class Mailbox {
 				case 2: return this.dataIndex;
 				case 3:
 					if(this.isValidDeviceIndex(this.devIndex)) {
-						if(this.devices[this.devIndex].read) return this.devices[this.devIndex].read(this.devices[this.devIndex],this.dataIndex);
+						if(this.devices[this.devIndex].read) return this.devices[this.devIndex].read(this.devices[this.devIndex],this.dataIndex,vm);
 					} else return 0xFFFF;
 				case 4:
 					if(this.isValidDeviceIndex(this.devIndex)) return this.devices[this.devIndex].hdr.vendorID;
@@ -58,7 +59,7 @@ class Mailbox {
 					break;
 				case 3:
 					if(this.isValidDeviceIndex(this.devIndex)) {
-						if(this.devices[this.devIndex].write) return this.devices[this.devIndex].write(this.devices[this.devIndex],this.dataIndex,v);
+						if(this.devices[this.devIndex].write) return this.devices[this.devIndex].write(this.devices[this.devIndex],this.dataIndex,v,vm);
 					} else return 0xFFFF;
 			}
 		});
@@ -83,7 +84,12 @@ class Mailbox {
 		assert(typeof(dev.name) == "string","dev.name is not a string");
 		
 		var i = this.devices.push(dev)-1;
-		if(this.devices[i].create) this.devices[i].create(this.devices[i]);
+		if(this.devices[i].create) this.devices[i].create(this.devices[i],this.vm);
+	}
+	intr(dev) {
+		var i = this.devices.indexOf(dev);
+		this.vm.cpu.cores[this.vm.cpu.currentCore].regs.data[0] = i;
+		this.intr(7);
 	}
 }
 module.exports = Mailbox;
