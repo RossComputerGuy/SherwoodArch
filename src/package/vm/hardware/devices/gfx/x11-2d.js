@@ -1,4 +1,4 @@
-const jints = require("jints")
+const jints = require("jints");
 const x11 = require("x11");
 
 const FLAGS = {
@@ -103,6 +103,7 @@ class X11Graphics2DDevice {
 					this.pos = 0;
 					this.width = this.opts.width;
 					this.height = this.opts.height;
+					this.bpp = this.opts.bpp;
 					this.X.DestroyWindow(this.xids["win"]);
 					for(var name in this.xids) this.X.ReleaseID(this.xids[name]);
 					delete this.framebuffer;
