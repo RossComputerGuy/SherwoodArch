@@ -4,10 +4,6 @@ const FLAGS = {
 	"ENABLE": (1 << 0)
 };
 
-const BUTTONS = [
-	"
-];
-
 class MouseHIDDevice extends EventEmitter {
 	constructor(vm) {
 		super();
