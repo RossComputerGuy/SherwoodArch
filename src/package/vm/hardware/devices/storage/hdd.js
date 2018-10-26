@@ -57,6 +57,7 @@ class HDDStorageDevice {
 		});
 	}
 	read(dev,i,vm) {
+		if(!(this.flags & FLAGS["ENABLE"])) return 0;
 		switch(i) {
 			case 0: return this.flags;
 			case 1: return this.blkdev.blockSize;
