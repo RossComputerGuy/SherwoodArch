@@ -16,7 +16,7 @@ class MouseHIDDevice extends EventEmitter {
 			subclass: 0
 		};
 		
-		this.name = "Basic Mouse Device";
+		this.name = "Basic Mouse Device for Websites";
 		
 		this.flags = 0;
 		this.input = [];
